@@ -40,10 +40,11 @@ jobs:
           echo "sdk.dir=${ANDROID_HOME}" > local.properties
           echo "ndk.dir=${ANDROID_NDK_HOME}" >> local.properties
           ./run init action gradle
-          ./gradlew assembleDebug
+          ./gradlew assemblePreviewDebug
+          find app/build/outputs/apk -type f -name "*.apk"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: NekoBox-mod-arm64
-          path: app/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/**/NekoBox*.apk
