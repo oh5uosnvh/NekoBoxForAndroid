@@ -13,7 +13,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.widget.AppCompatButton
+import com.google.android.material.button.MaterialButton
 import androidx.fragment.app.Fragment
 import androidx.preference.EditTextPreferenceDialogFragmentCompat
 import com.google.android.material.textfield.TextInputLayout
@@ -192,15 +192,12 @@ class CopyableEditTextPreferenceDialog : EditTextPreferenceDialogFragmentCompat(
 
     /** 复制成一个和「保存」外观一致的按钮，免得摆在一起风格不一致 */
     private fun cloneButton(src: Button, textRes: Int): Button =
-        AppCompatButton(src.context).apply {
+        MaterialButton(src.context, null, com.google.android.material.R.attr.buttonBarPositiveButtonStyle).apply {
             setText(textRes)
             setTextColor(src.textColors)
             setTextSize(TypedValue.COMPLEX_UNIT_PX, src.textSize)
             typeface = src.typeface
             isAllCaps = src.isAllCaps
-            // 关键：填充色是 backgroundTint 画的，必须一起复制
-            backgroundTintList = src.backgroundTintList
-            background = src.background?.constantState?.newDrawable()?.mutate()
             minWidth = src.minWidth
             minimumWidth = src.minimumWidth
             minHeight = src.minHeight
