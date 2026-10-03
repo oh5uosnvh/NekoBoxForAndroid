@@ -260,6 +260,10 @@
     <string name="action_mieru" translatable="false">Mieru</string>
     <string name="action_naive" translatable="false">Naïve</string>
     <string name="action_anytls" translatable="false">AnyTLS</string>
+    <string name="action_oppa" translatable="false">Oppa</string>
+    <string name="oppa_preconnect">Preconnected sessions</string>
+    <string name="oppa_preconnect_summary">Target number of idle TLS sessions (0–64)</string>
+    <string name="oppa_password_length_error">Oppa password must contain 1–4096 UTF-8 bytes</string>
     <string name="action_hysteria" translatable="false">Hysteria</string>
     <string name="action_ssh" translatable="false">SSH</string>
     <string name="action_wireguard" translatable="false">WireGuard</string>

@@ -1,31 +1,26 @@
 package io.nekohasekai.sagernet.ui
 
-import android.content.Context
 import android.content.Intent
+import android.os.Bundle
+import android.text.format.Formatter
+import android.view.MenuItem
+import android.view.View
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.RippleDrawable
-import android.os.Bundle
 import android.view.Gravity
-import android.view.MenuItem
 import android.view.MotionEvent
-import android.view.View
-import android.view.ViewGroup
-import android.widget.FrameLayout
-import android.widget.ImageView
-import android.widget.LinearLayout
-import android.widget.PopupWindow
-import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.PopupWindow
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.ColorUtils
+import android.view.ViewGroup
+import android.widget.LinearLayout
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.widget.PopupMenu
 import androidx.appcompat.widget.Toolbar
-import androidx.core.view.ViewCompat
-import androidx.core.view.isGone
-import androidx.core.view.isInvisible
-import androidx.lifecycle.lifecycleScope
-import io.nekohasekai.sagernet.widget.FixedLinearLayoutManager
+import androidx.core.view.*
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -33,27 +28,19 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import io.nekohasekai.sagernet.GroupType
 import io.nekohasekai.sagernet.R
 import io.nekohasekai.sagernet.SagerNet
-import io.nekohasekai.sagernet.database.DataStore
-import io.nekohasekai.sagernet.database.GroupManager
-import io.nekohasekai.sagernet.database.ProxyGroup
-import io.nekohasekai.sagernet.database.SagerDatabase
+import io.nekohasekai.sagernet.database.*
 import io.nekohasekai.sagernet.databinding.LayoutGroupItemBinding
 import io.nekohasekai.sagernet.fmt.toUniversalLink
 import io.nekohasekai.sagernet.group.GroupUpdater
-import io.nekohasekai.sagernet.ktx.Logs
-import io.nekohasekai.sagernet.ktx.app
-import io.nekohasekai.sagernet.ktx.dp2px
-import io.nekohasekai.sagernet.ktx.runOnDefaultDispatcher
+import io.nekohasekai.sagernet.ktx.*
 import io.nekohasekai.sagernet.widget.ListListener
 import io.nekohasekai.sagernet.widget.QRCodeDialog
 import io.nekohasekai.sagernet.widget.UndoSnackbarManager
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import moe.matsuri.nb4a.utils.Util
 import moe.matsuri.nb4a.utils.toBytesString
-import java.util.Collections
+import java.lang.NumberFormatException
+import java.util.*
 
 class GroupFragment : ToolbarFragment(R.layout.layout_group),
     Toolbar.OnMenuItemClickListener {
@@ -63,13 +50,13 @@ class GroupFragment : ToolbarFragment(R.layout.layout_group),
     lateinit var layoutManager: LinearLayoutManager
     lateinit var groupAdapter: GroupAdapter
     lateinit var undoManager: UndoSnackbarManager<ProxyGroup>
-    private lateinit var itemTouchHelper: ItemTouchHelper
 
-    // ------------------------------------------------------ 顶栏过滤 / 排序
+    private lateinit var itemTouchHelper: ItemTouchHelper
     private lateinit var filterDefaultCell: TextView
     private lateinit var filterSortCell: TextView
+    private var filterPopup: PopupWindow? = null
     private var filterSubscription: Boolean? = null
-    private var sortMode: Int = SORT_DEFAULT
+    private var sortMode = SORT_DEFAULT
 
     companion object {
         private const val SORT_DEFAULT = 0
@@ -86,8 +73,6 @@ class GroupFragment : ToolbarFragment(R.layout.layout_group),
         toolbar.inflateMenu(R.menu.add_group_menu)
         toolbar.setOnMenuItemClickListener(this)
 
-        setupFilterBar()
-
         groupListView = view.findViewById(R.id.group_list)
         layoutManager = FixedLinearLayoutManager(groupListView)
         groupListView.layoutManager = layoutManager
@@ -96,17 +81,15 @@ class GroupFragment : ToolbarFragment(R.layout.layout_group),
         groupListView.adapter = groupAdapter
 
         undoManager = UndoSnackbarManager(activity, groupAdapter)
+        setupFilterBar()
 
-        // 官方原生 ItemTouchHelper 滑动删除 + 拖拽排序（通过 ☷ 按钮触发拖拽）
         itemTouchHelper = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
             ItemTouchHelper.UP or ItemTouchHelper.DOWN, ItemTouchHelper.START
         ) {
-            override fun isLongPressDragEnabled(): Boolean = false
-
             override fun getSwipeDirs(
                 recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder
             ): Int {
-                val proxyGroup = (viewHolder as? GroupHolder)?.proxyGroup ?: return 0
+                val proxyGroup = (viewHolder as GroupHolder).proxyGroup
                 if (proxyGroup.ungrouped || proxyGroup.id in GroupUpdater.updating) {
                     return 0
                 }
@@ -116,7 +99,7 @@ class GroupFragment : ToolbarFragment(R.layout.layout_group),
             override fun getDragDirs(
                 recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder
             ): Int {
-                val proxyGroup = (viewHolder as? GroupHolder)?.proxyGroup ?: return 0
+                val proxyGroup = (viewHolder as GroupHolder).proxyGroup
                 if (proxyGroup.ungrouped || proxyGroup.id in GroupUpdater.updating) {
                     return 0
                 }
@@ -125,11 +108,8 @@ class GroupFragment : ToolbarFragment(R.layout.layout_group),
 
             override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
                 val index = viewHolder.bindingAdapterPosition
-                if (index != RecyclerView.NO_POSITION) {
-                    val group = (viewHolder as GroupHolder).proxyGroup
-                    groupAdapter.remove(index)
-                    undoManager.remove(index to group)
-                }
+                groupAdapter.remove(index)
+                undoManager.remove(index to (viewHolder as GroupHolder).proxyGroup)
             }
 
             override fun onMove(
@@ -149,61 +129,136 @@ class GroupFragment : ToolbarFragment(R.layout.layout_group),
             }
         })
         itemTouchHelper.attachToRecyclerView(groupListView)
+
     }
 
-    private fun setupFilterBar() {
-        val foreground = resolveToolbarForeground()
+    override fun onMenuItemClick(item: MenuItem): Boolean {
+        when (item.itemId) {
+            R.id.action_new_group -> {
+                startActivity(Intent(context, GroupSettingsActivity::class.java))
+            }
 
-        val segment = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            background = topbarSegmentBackground()
-            layoutParams = Toolbar.LayoutParams(
-                Toolbar.LayoutParams.WRAP_CONTENT,
-                resources.getDimensionPixelSize(R.dimen.topbar_segment_height),
-            ).apply {
-                gravity = Gravity.CENTER_VERTICAL or Gravity.START
-                marginStart = dp2px(12)
+            R.id.action_update_all -> {
+                MaterialAlertDialogBuilder(requireContext()).setTitle(R.string.confirm)
+                    .setMessage(R.string.update_all_subscription)
+                    .setPositiveButton(R.string.yes) { _, _ ->
+                        SagerDatabase.groupDao.allGroups()
+                            .filter { it.type == GroupType.SUBSCRIPTION }
+                            .forEach {
+                                GroupUpdater.startUpdate(it, true)
+                            }
+                    }
+                    .setNegativeButton(R.string.no, null)
+                    .show()
+            }
+        }
+        return true
+    }
+
+    private lateinit var selectedGroup: ProxyGroup
+
+    private val exportProfiles =
+        registerForActivityResult(ActivityResultContracts.CreateDocument()) { data ->
+            if (data != null) {
+                runOnDefaultDispatcher {
+                    val profiles = SagerDatabase.proxyDao.getByGroup(selectedGroup.id)
+                    val links = profiles.joinToString("\n") { it.toStdLink(compact = true) }
+                    try {
+                        (requireActivity() as MainActivity).contentResolver.openOutputStream(
+                            data
+                        )!!.bufferedWriter().use {
+                            it.write(links)
+                        }
+                        onMainDispatcher {
+                            snackbar(getString(R.string.action_export_msg)).show()
+                        }
+                    } catch (e: Exception) {
+                        Logs.w(e)
+                        onMainDispatcher {
+                            snackbar(e.readableMessage).show()
+                        }
+                    }
+
+                }
             }
         }
 
-        filterDefaultCell = TextView(context).apply {
-            applySegmentCellStyle(this, foreground)
-            setOnClickListener { showFilterPicker(it) }
+
+    // ------------------------------------------------------ 顶栏：过滤/排序
+
+    private fun topbarSegmentBackground(): Drawable {
+        val ta = requireContext().obtainStyledAttributes(
+            intArrayOf(R.attr.colorSurface, android.R.attr.textColorPrimary)
+        )
+        val surface = ta.getColor(0, Color.BLACK)
+        val textPrimary = ta.getColor(1, Color.WHITE)
+        ta.recycle()
+
+        val bg = ColorUtils.blendARGB(surface, textPrimary, 0.08f)
+        val stroke = ContextCompat.getColor(requireContext(), R.color.segment_stroke)
+
+        return GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = resources.getDimension(R.dimen.group_delete_corner)
+            setColor(bg)
+            setStroke(dp2px(1), stroke)
+        }
+    }
+
+    private fun setupFilterBar() {
+        val ctx = requireContext()
+        val segmentHeight = resources.getDimensionPixelSize(R.dimen.topbar_segment_height)
+        val barForeground = toolbarForeground()
+
+        fun cell(onClick: (View) -> Unit) = TextView(ctx).apply {
+            applySegmentCellStyle(this, barForeground)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, segmentHeight,
+            )
+            setOnClickListener { onClick(it) }
         }
 
-        val divider = View(context).apply {
-            layoutParams = LinearLayout.LayoutParams(dp2px(1), ViewGroup.LayoutParams.MATCH_PARENT)
-            setBackgroundColor(resources.getColor(R.color.segment_stroke))
+        val defaultCell = cell { showFilterPicker(it) }
+        val sortCell = cell { showSortPicker(it) }
+
+        val bar = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            background = topbarSegmentBackground()
+
+            val divider = View(ctx).apply {
+                setBackgroundColor(ContextCompat.getColor(ctx, R.color.segment_stroke))
+            }
+
+            addView(defaultCell)
+            addView(
+                divider,
+                LinearLayout.LayoutParams(dp2px(1), ViewGroup.LayoutParams.MATCH_PARENT),
+            )
+            addView(sortCell)
         }
 
-        filterSortCell = TextView(context).apply {
-            applySegmentCellStyle(this, foreground)
-            setOnClickListener { showSortPicker(it) }
+        val lp = Toolbar.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, segmentHeight,
+        ).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            marginEnd = dp2px(8)
         }
+        toolbar.addView(bar, lp)
 
-        segment.addView(filterDefaultCell)
-        segment.addView(divider)
-        segment.addView(filterSortCell)
-
-        toolbar.addView(segment)
+        filterDefaultCell = defaultCell
+        filterSortCell = sortCell
         updateFilterBar()
     }
 
-    private fun resolveToolbarForeground(): Int {
-        val ta = requireContext().obtainStyledAttributes(
-            intArrayOf(android.R.attr.textColorPrimary, R.attr.colorOnPrimary)
-        )
-        val color = ta.getColor(1, ta.getColor(0, Color.WHITE))
-        ta.recycle()
-        return color
-    }
-
-    private fun topbarSegmentBackground(): Drawable = GradientDrawable().apply {
-        shape = GradientDrawable.RECTANGLE
-        setColor(resources.getColor(R.color.segment_fill))
-        setStroke(1, resources.getColor(R.color.segment_stroke))
-        cornerRadius = dp2px(8).toFloat()
+    private fun toolbarForeground(): Int {
+        val tv = android.util.TypedValue()
+        val ctx = toolbar.context
+        return if (ctx.theme.resolveAttribute(android.R.attr.textColorPrimary, tv, true)) {
+            if (tv.resourceId != 0) ContextCompat.getColor(ctx, tv.resourceId) else tv.data
+        } else {
+            themeTextColor()
+        }
     }
 
     private fun applySegmentCellStyle(tv: TextView, foreground: Int) {
@@ -222,17 +277,23 @@ class GroupFragment : ToolbarFragment(R.layout.layout_group),
         }
     }
 
-    private fun rippleDrawable(): Drawable {
-        val mask = GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = dp2px(8).toFloat()
-            setColor(Color.WHITE)
-        }
-        return RippleDrawable(
-            android.content.res.ColorStateList.valueOf(Color.parseColor("#33FFFFFF")),
-            null,
-            mask,
+    private fun rippleDrawable(): android.graphics.drawable.Drawable? {
+        val tv = android.util.TypedValue()
+        return if (requireContext().theme.resolveAttribute(
+                android.R.attr.selectableItemBackgroundBorderless, tv, true,
+            )
+        ) {
+            ContextCompat.getDrawable(requireContext(), tv.resourceId)
+        } else null
+    }
+
+    private fun themeTextColor(): Int {
+        val ta = requireContext().obtainStyledAttributes(
+            intArrayOf(android.R.attr.textColorPrimary)
         )
+        val color = ta.getColor(0, Color.WHITE)
+        ta.recycle()
+        return color
     }
 
     private fun updateFilterBar() {
@@ -282,120 +343,272 @@ class GroupFragment : ToolbarFragment(R.layout.layout_group),
         showPickerWindow(content, anchor)
     }
 
-    private var activePicker: PopupWindow? = null
-
     private fun pickerContent(): LinearLayout = LinearLayout(requireContext()).apply {
         orientation = LinearLayout.VERTICAL
-        setPadding(dp2px(6), dp2px(6), dp2px(6), dp2px(6))
+        setPadding(0, dp2px(4), 0, dp2px(4))
     }
 
-    private fun addPickerRow(parent: LinearLayout, row: View) {
-        parent.addView(row, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            dp2px(40),
-        ).apply {
-            bottomMargin = dp2px(4)
-        })
-    }
-
-    private fun filterRow(title: String, selected: Boolean): View {
-        val ctx = requireContext()
-        return FrameLayout(ctx).apply {
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp2px(8).toFloat()
-                setColor(if (selected) themeColor(R.attr.colorPrimary) else Color.TRANSPARENT)
-            }
-            isClickable = true
-            isFocusable = true
-            val tv = TextView(ctx).apply {
-                text = title
-                textSize = 14f
-                setTextColor(if (selected) Color.WHITE else themeColor(android.R.attr.textColorPrimary))
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp2px(12), 0, dp2px(12), 0)
-            }
-            addView(tv, FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
+    private fun addPickerRow(content: LinearLayout, row: View) {
+        content.addView(
+            row,
+            LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                Gravity.START or Gravity.CENTER_VERTICAL,
-            ))
-        }
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ),
+        )
     }
 
-    private fun showPickerWindow(content: View, anchor: View) {
-        activePicker?.dismiss()
-        val scroll = ScrollView(requireContext()).apply {
+    private fun showPickerWindow(content: LinearLayout, anchor: View) {
+        dismissFilterPicker()
+        val ctx = requireContext()
+
+        val card = com.google.android.material.card.MaterialCardView(ctx).apply {
+            radius = dp2px(12).toFloat()
+            cardElevation = dp2px(8).toFloat()
+            strokeWidth = 0
+            val ta = ctx.obtainStyledAttributes(intArrayOf(R.attr.colorSurface))
+            val surface = ta.getColor(0, Color.DKGRAY)
+            ta.recycle()
+            setCardBackgroundColor(surface)
             addView(content)
         }
-        val popupBg = GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = dp2px(12).toFloat()
-            setColor(themeColor(android.R.attr.colorBackground))
-            setStroke(1, resources.getColor(R.color.segment_stroke))
-        }
-        val pw = PopupWindow(
-            scroll,
-            dp2px(200),
+
+        filterPopup = PopupWindow(
+            card,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
             true,
         ).apply {
-            setBackgroundDrawable(popupBg)
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
             elevation = dp2px(8).toFloat()
             isOutsideTouchable = true
+            showAsDropDown(anchor, 0, dp2px(4))
         }
-        activePicker = pw
-        pw.showAsDropDown(anchor, 0, dp2px(4))
     }
 
-    private fun themeColor(attr: Int): Int {
-        val ta = requireContext().obtainStyledAttributes(intArrayOf(attr))
-        val color = ta.getColor(0, Color.GRAY)
-        ta.recycle()
-        return color
+    private fun dismissFilterPicker() {
+        filterPopup?.dismiss()
+        filterPopup = null
     }
 
-    private fun setFilter(sub: Boolean?) {
-        filterSubscription = sub
+    private fun filterRow(label: String, selected: Boolean): TextView = TextView(requireContext()).apply {
+        text = label
+        setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14f)
+        setTextColor(
+            if (selected) {
+                val ta = context.obtainStyledAttributes(intArrayOf(R.attr.colorPrimary))
+                val c = ta.getColor(0, themeTextColor())
+                ta.recycle()
+                c
+            } else {
+                themeTextColor()
+            }
+        )
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp2px(16), dp2px(10), dp2px(20), dp2px(10))
+        isClickable = true
+        isFocusable = true
+        background = rippleDrawable()
+    }
+
+    private fun setFilter(subscriptionOnly: Boolean?) {
+        filterSubscription = subscriptionOnly
+        dismissFilterPicker()
         updateFilterBar()
-        activePicker?.dismiss()
-        groupAdapter.applyFilterAndSort()
+        groupAdapter.applyFilter()
     }
 
     private fun setSort(mode: Int) {
         sortMode = mode
+        dismissFilterPicker()
         updateFilterBar()
-        activePicker?.dismiss()
-        groupAdapter.applyFilterAndSort()
+        groupAdapter.applyFilter()
     }
 
-    override fun onMenuItemClick(item: MenuItem): Boolean {
-        when (item.itemId) {
-            R.id.action_new_group -> {
-                startActivity(Intent(context, GroupSettingsActivity::class.java))
+    inner class GroupAdapter : RecyclerView.Adapter<GroupHolder>(),
+        GroupManager.Listener,
+        UndoSnackbarManager.Interface<ProxyGroup> {
+
+        private val fullList = ArrayList<ProxyGroup>()
+        val groupList = ArrayList<ProxyGroup>()
+
+        suspend fun reload() {
+            val groups = SagerDatabase.groupDao.allGroups().toMutableList()
+            if (groups.size > 1 && SagerDatabase.proxyDao.countByGroup(groups.find { it.ungrouped }!!.id) == 0L) groups.removeAll { it.ungrouped }
+            fullList.clear()
+            fullList.addAll(groups)
+            rebuildVisible()
+            groupListView.post {
+                notifyDataSetChanged()
             }
-            R.id.action_update_all -> {
-                MaterialAlertDialogBuilder(requireContext()).setTitle(R.string.confirm)
-                    .setMessage(R.string.update_all_subscription)
-                    .setPositiveButton(R.string.yes) { _, _ ->
-                        SagerDatabase.groupDao.allGroups()
-                            .filter { it.type == GroupType.SUBSCRIPTION }
-                            .forEach { GroupUpdater.startUpdate(it, true) }
-                    }
-                    .setNegativeButton(R.string.no, null)
-                    .show()
-            }
-            else -> return false
         }
-        return true
+
+        private fun rebuildVisible() {
+            var list = fullList.toList()
+            val filter = filterSubscription
+            if (filter != null) {
+                list = list.filter { (it.type == GroupType.SUBSCRIPTION) == filter }
+            }
+            list = when (sortMode) {
+                SORT_ASC -> list.sortedBy { it.displayName().lowercase() }
+                SORT_DESC -> list.sortedByDescending { it.displayName().lowercase() }
+                else -> list
+            }
+            groupList.clear()
+            groupList.addAll(list)
+        }
+
+        fun applyFilter() {
+            rebuildVisible()
+            notifyDataSetChanged()
+        }
+
+        init {
+            setHasStableIds(true)
+
+            runOnDefaultDispatcher {
+                reload()
+            }
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): GroupHolder {
+            return GroupHolder(LayoutGroupItemBinding.inflate(layoutInflater, parent, false))
+        }
+
+        override fun onBindViewHolder(holder: GroupHolder, position: Int) {
+            holder.bind(groupList[position])
+        }
+
+        override fun getItemCount(): Int {
+            return groupList.size
+        }
+
+        override fun getItemId(position: Int): Long {
+            return groupList[position].id
+        }
+
+        private val updated = HashSet<ProxyGroup>()
+
+        fun move(from: Int, to: Int) {
+            val first = groupList[from]
+            var previousOrder = first.userOrder
+            val (step, range) = if (from < to) Pair(1, from until to) else Pair(
+                -1, to + 1 downTo from
+            )
+            for (i in range) {
+                val next = groupList[i + step]
+                val order = next.userOrder
+                next.userOrder = previousOrder
+                previousOrder = order
+                groupList[i] = next
+                updated.add(next)
+            }
+            first.userOrder = previousOrder
+            groupList[to] = first
+            updated.add(first)
+            notifyItemMoved(from, to)
+        }
+
+        fun commitMove() = runOnDefaultDispatcher {
+            updated.forEach { SagerDatabase.groupDao.updateGroup(it) }
+            updated.clear()
+        }
+
+        fun remove(index: Int) {
+            val item = groupList.removeAt(index)
+            fullList.removeAll { it.id == item.id }
+            notifyItemRemoved(index)
+        }
+
+        override fun undo(actions: List<Pair<Int, ProxyGroup>>) {
+            for ((index, item) in actions) {
+                groupList.add(index, item)
+                notifyItemInserted(index)
+            }
+        }
+
+        override fun commit(actions: List<Pair<Int, ProxyGroup>>) {
+            val groups = actions.map { it.second }
+            runOnDefaultDispatcher {
+                GroupManager.deleteGroup(groups)
+                reload()
+            }
+        }
+
+        override suspend fun groupAdd(group: ProxyGroup) {
+            groupList.add(group)
+            delay(300L)
+
+            onMainDispatcher {
+                undoManager.flush()
+                notifyItemInserted(groupList.size - 1)
+
+                if (group.type == GroupType.SUBSCRIPTION) {
+                    GroupUpdater.startUpdate(group, true)
+                }
+            }
+        }
+
+        override suspend fun groupRemoved(groupId: Long) {
+            val index = groupList.indexOfFirst { it.id == groupId }
+            if (index == -1) return
+            onMainDispatcher {
+                undoManager.flush()
+                if (SagerDatabase.groupDao.allGroups().size <= 2) {
+                    runOnDefaultDispatcher {
+                        reload()
+                    }
+                } else {
+                    groupList.removeAt(index)
+                    notifyItemRemoved(index)
+                }
+            }
+        }
+
+        override suspend fun groupUpdated(group: ProxyGroup) {
+            val index = groupList.indexOfFirst { it.id == group.id }
+            if (index == -1) {
+                reload()
+                return
+            }
+            groupList[index] = group
+            onMainDispatcher {
+                undoManager.flush()
+
+                notifyItemChanged(index)
+            }
+        }
+
+        override suspend fun groupUpdated(groupId: Long) {
+            val index = groupList.indexOfFirst { it.id == groupId }
+            if (index == -1) {
+                reload()
+                return
+            }
+            onMainDispatcher {
+                notifyItemChanged(index)
+            }
+        }
+
+    }
+
+    override fun onDestroyView() {
+        dismissFilterPicker()
+        super.onDestroyView()
     }
 
     override fun onDestroy() {
+        if (::groupAdapter.isInitialized) {
+            GroupManager.removeListener(groupAdapter)
+        }
+
         super.onDestroy()
-        GroupManager.removeListener(groupAdapter)
+
+        if (!::undoManager.isInitialized) return
+        undoManager.flush()
     }
 
-    inner class GroupHolder(val binding: LayoutGroupItemBinding) :
+    inner class GroupHolder(binding: LayoutGroupItemBinding) :
         RecyclerView.ViewHolder(binding.root),
         PopupMenu.OnMenuItemClickListener {
 
@@ -410,21 +623,63 @@ class GroupFragment : ToolbarFragment(R.layout.layout_group),
         val updateButton = binding.groupUpdate
         val subscriptionUpdateProgress = binding.subscriptionUpdateProgress
 
+        override fun onMenuItemClick(item: MenuItem): Boolean {
+
+            fun export(link: String) {
+                val success = SagerNet.trySetPrimaryClip(link)
+                activity.snackbar(if (success) R.string.action_export_msg else R.string.action_export_err)
+                    .show()
+            }
+
+            when (item.itemId) {
+                R.id.action_universal_qr -> {
+                    QRCodeDialog(
+                        proxyGroup.toUniversalLink(), proxyGroup.displayName()
+                    ).showAllowingStateLoss(parentFragmentManager)
+                }
+
+                R.id.action_universal_clipboard -> {
+                    export(proxyGroup.toUniversalLink())
+                }
+
+                R.id.action_export_clipboard -> {
+                    runOnDefaultDispatcher {
+                        val profiles = SagerDatabase.proxyDao.getByGroup(selectedGroup.id)
+                        val links = profiles.joinToString("\n") { it.toStdLink(compact = true) }
+                        onMainDispatcher {
+                            SagerNet.trySetPrimaryClip(links)
+                            snackbar(getString(R.string.copy_toast_msg)).show()
+                        }
+                    }
+                }
+
+                R.id.action_export_file -> {
+                    startFilesForResult(exportProfiles, "profiles_${proxyGroup.displayName()}.txt")
+                }
+
+                R.id.action_clear -> {
+                    MaterialAlertDialogBuilder(requireContext()).setTitle(R.string.confirm)
+                        .setMessage(R.string.clear_profiles_message)
+                        .setPositiveButton(R.string.yes) { _, _ ->
+                            runOnDefaultDispatcher {
+                                GroupManager.clearGroup(proxyGroup.id)
+                            }
+                        }
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show()
+                }
+            }
+
+            return true
+        }
+
+
         fun bind(group: ProxyGroup) {
             proxyGroup = group
 
-            editButton.isGone = proxyGroup.ungrouped
+            itemView.setOnClickListener { }
+
             sortButton.isGone = proxyGroup.ungrouped
-            updateButton.isInvisible = proxyGroup.type != GroupType.SUBSCRIPTION
-            groupName.text = proxyGroup.displayName()
-
-            editButton.setOnClickListener {
-                startActivity(Intent(it.context, GroupSettingsActivity::class.java).apply {
-                    putExtra(GroupSettingsActivity.EXTRA_GROUP_ID, group.id)
-                })
-            }
-
-            // ☷ 排序按钮按住直接进入拖拽排序
             sortButton.setOnTouchListener { _, event ->
                 if (event.actionMasked == MotionEvent.ACTION_DOWN &&
                     this@GroupHolder.bindingAdapterPosition != RecyclerView.NO_POSITION
@@ -434,246 +689,165 @@ class GroupFragment : ToolbarFragment(R.layout.layout_group),
                 false
             }
 
+            editButton.isGone = proxyGroup.ungrouped
+            updateButton.isInvisible = proxyGroup.type != GroupType.SUBSCRIPTION
+            groupName.text = proxyGroup.displayName()
+
+            editButton.setOnClickListener {
+                startActivity(Intent(it.context, GroupSettingsActivity::class.java).apply {
+                    putExtra(GroupSettingsActivity.EXTRA_GROUP_ID, group.id)
+                })
+            }
+
             updateButton.setOnClickListener {
                 GroupUpdater.startUpdate(proxyGroup, true)
             }
 
             optionsButton.setOnClickListener {
                 selectedGroup = proxyGroup
+
                 val popup = PopupMenu(requireContext(), it)
                 popup.menuInflater.inflate(R.menu.group_action_menu, popup.menu)
+
+                if (proxyGroup.type != GroupType.SUBSCRIPTION) {
+                    popup.menu.removeItem(R.id.action_share_subscription)
+                }
                 popup.setOnMenuItemClickListener(this)
                 popup.show()
             }
 
-            if (proxyGroup.type == GroupType.SUBSCRIPTION) {
-                subscriptionUpdateProgress.isGone = proxyGroup.id !in GroupUpdater.updating
-                groupTraffic.isGone = false
-                groupStatus.text = getString(
-                    R.string.group_status,
-                    proxyGroup.order,
-                    proxyGroup.profileCount,
-                    proxyGroup.frontProxyCount
-                )
-                if (proxyGroup.subscription?.upload != 0L || proxyGroup.subscription?.download != 0L) {
-                    groupTraffic.text = getString(
-                        R.string.traffic,
-                        toBytesString(proxyGroup.subscription?.upload ?: 0L),
-                        toBytesString(proxyGroup.subscription?.download ?: 0L),
-                        if (proxyGroup.subscription?.total == 0L) getString(R.string.traffic_infinity)
-                        else toBytesString(proxyGroup.subscription?.total ?: 0L)
+            if (proxyGroup.id in GroupUpdater.updating) {
+                (groupName.parent as LinearLayout).apply {
+                    setPadding(paddingLeft, dp2px(11), paddingRight, paddingBottom)
+                }
+
+                subscriptionUpdateProgress.isVisible = true
+
+                if (!GroupUpdater.progress.containsKey(proxyGroup.id)) {
+                    subscriptionUpdateProgress.isIndeterminate = true
+                } else {
+                    subscriptionUpdateProgress.isIndeterminate = false
+                    GroupUpdater.progress[proxyGroup.id]?.let {
+                        subscriptionUpdateProgress.max = it.max
+                        subscriptionUpdateProgress.progress = it.progress
+                    }
+                }
+
+                updateButton.isInvisible = true
+                editButton.isGone = true
+            } else {
+                (groupName.parent as LinearLayout).apply {
+                    setPadding(paddingLeft, dp2px(15), paddingRight, paddingBottom)
+                }
+
+                subscriptionUpdateProgress.isVisible = false
+                updateButton.isInvisible = proxyGroup.type != GroupType.SUBSCRIPTION
+                editButton.isGone = proxyGroup.ungrouped
+            }
+
+            val subscription = proxyGroup.subscription
+            if (subscription != null && subscription.bytesUsed > 0L) { // SIP008 & Open Online Config
+                groupTraffic.isVisible = true
+                groupTraffic.text = if (subscription.bytesRemaining > 0L) {
+                    app.getString(
+                        R.string.subscription_traffic, Formatter.formatFileSize(
+                            app, subscription.bytesUsed
+                        ), Formatter.formatFileSize(
+                            app, subscription.bytesRemaining
+                        )
                     )
                 } else {
-                    groupTraffic.text = getString(
-                        R.string.group_status_traffic_empty,
-                        proxyGroup.subscription?.status() ?: ""
+                    app.getString(
+                        R.string.subscription_used, Formatter.formatFileSize(
+                            app, subscription.bytesUsed
+                        )
                     )
                 }
-                if (proxyGroup.subscription?.user.isNullOrEmpty()) {
-                    groupUser.isGone = true
-                } else {
-                    groupUser.isGone = false
-                    groupUser.text = proxyGroup.subscription?.user
+                groupStatus.setPadding(0)
+            } else if (subscription != null && !subscription.subscriptionUserinfo.isNullOrBlank()) { // Raw
+                var text = ""
+
+                fun get(regex: String): String? {
+                    return regex.toRegex().findAll(subscription.subscriptionUserinfo).mapNotNull {
+                        if (it.groupValues.size > 1) it.groupValues[1] else null
+                    }.firstOrNull()
+                }
+
+                try {
+                    var used: Long = 0
+                    get("upload=([0-9]+)")?.apply {
+                        used += toLong()
+                    }
+                    get("download=([0-9]+)")?.apply {
+                        used += toLong()
+                    }
+                    val total = get("total=([0-9]+)")?.toLong() ?: 0
+                    val remain = total - used
+                    if (used > 0 || total > 0) {
+                        text += if (remain > 0) {
+                            getString(
+                                R.string.subscription_traffic,
+                                used.toBytesString(),
+                                remain.toBytesString()
+                            )
+                        } else {
+                            getString(R.string.subscription_used, used.toBytesString())
+                        }
+                    }
+                    get("expire=([0-9]+)")?.apply {
+                        text += "\n"
+                        text += getString(
+                            R.string.subscription_expire,
+                            Util.timeStamp2Text(this.toLong() * 1000)
+                        )
+                    }
+                } catch (_: NumberFormatException) {
+                    // ignore
+                }
+
+                if (text.isNotEmpty()) {
+                    groupTraffic.isVisible = true
+                    groupTraffic.text = text
+                    groupStatus.setPadding(0)
                 }
             } else {
-                subscriptionUpdateProgress.isGone = true
-                groupTraffic.isGone = true
-                groupUser.isGone = true
-                groupStatus.text = getString(
-                    R.string.group_status_basic,
-                    proxyGroup.order,
-                    proxyGroup.profileCount,
-                    proxyGroup.frontProxyCount
-                )
+                groupTraffic.isVisible = false
+                groupStatus.setPadding(0, 0, 0, dp2px(4))
             }
-        }
 
-        override fun onMenuItemClick(item: MenuItem): Boolean {
-            when (item.itemId) {
-                R.id.action_export -> {
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        val universalLink = selectedGroup.toUniversalLink()
-                        withContext(Dispatchers.Main) {
-                            startActivity(
-                                Intent.createChooser(
-                                    Intent(Intent.ACTION_SEND).setType("text/plain")
-                                        .putExtra(Intent.EXTRA_TEXT, universalLink),
-                                    getString(R.string.export)
+            groupUser.text = subscription?.username ?: ""
+
+            runOnDefaultDispatcher {
+                val size = SagerDatabase.proxyDao.countByGroup(group.id)
+                onMainDispatcher {
+                    @Suppress("DEPRECATION") when (group.type) {
+                        GroupType.BASIC -> {
+                            if (size == 0L) {
+                                groupStatus.setText(R.string.group_status_empty)
+                            } else {
+                                groupStatus.text = getString(R.string.group_status_proxies, size)
+                            }
+                        }
+
+                        GroupType.SUBSCRIPTION -> {
+                            groupStatus.text = if (size == 0L) {
+                                getString(R.string.group_status_empty_subscription)
+                            } else {
+                                val date = Date(group.subscription!!.lastUpdated * 1000L)
+                                getString(
+                                    R.string.group_status_proxies_subscription,
+                                    size,
+                                    "${date.month + 1} - ${date.date}"
                                 )
-                            )
-                        }
-                    }
-                }
-                R.id.action_export_clipboard -> {
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        val universalLink = selectedGroup.toUniversalLink()
-                        withContext(Dispatchers.Main) {
-                            Util.setClipboard(universalLink)
-                            SagerNet.showToast(R.string.action_export_clipboard)
-                        }
-                    }
-                }
-                R.id.action_qr_code -> {
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        val universalLink = selectedGroup.toUniversalLink()
-                        withContext(Dispatchers.Main) {
-                            QRCodeDialog(universalLink).show(
-                                parentFragmentManager, "qr_code"
-                            )
-                        }
-                    }
-                }
-                R.id.action_clear -> {
-                    MaterialAlertDialogBuilder(requireContext()).setTitle(R.string.confirm)
-                        .setMessage(R.string.clear_profiles_message)
-                        .setPositiveButton(R.string.yes) { _, _ ->
-                            lifecycleScope.launch(Dispatchers.IO) {
-                                SagerDatabase.proxyDao.deleteByGroup(selectedGroup.id)
                             }
+
                         }
-                        .setNegativeButton(R.string.no, null)
-                        .show()
+                    }
                 }
-                R.id.action_delete -> {
-                    MaterialAlertDialogBuilder(requireContext()).setTitle(R.string.confirm)
-                        .setMessage(R.string.delete_group_message)
-                        .setPositiveButton(R.string.yes) { _, _ ->
-                            val index = bindingAdapterPosition
-                            if (index != RecyclerView.NO_POSITION) {
-                                groupAdapter.remove(index)
-                                undoManager.remove(index to proxyGroup)
-                            }
-                        }
-                        .setNegativeButton(R.string.no, null)
-                        .show()
-                }
-                else -> return false
+
             }
-            return true
+
         }
     }
 
-    var selectedGroup = ProxyGroup()
-
-    inner class GroupAdapter : RecyclerView.Adapter<GroupHolder>(),
-        GroupManager.GroupListener, UndoSnackbarManager.UndoAdapter<ProxyGroup> {
-
-        var groupList: MutableList<ProxyGroup> = ArrayList()
-        private var rawGroupList: MutableList<ProxyGroup> = ArrayList()
-
-        init {
-            reloadGroups()
-        }
-
-        fun reloadGroups() {
-            lifecycleScope.launch(Dispatchers.IO) {
-                val groups = SagerDatabase.groupDao.allGroups().toMutableList()
-                withContext(Dispatchers.Main) {
-                    rawGroupList = groups
-                    applyFilterAndSort()
-                }
-            }
-        }
-
-        fun applyFilterAndSort() {
-            var list = rawGroupList.toList()
-            filterSubscription?.let { isSub ->
-                list = if (isSub) {
-                    list.filter { it.type == GroupType.SUBSCRIPTION }
-                } else {
-                    list.filter { it.type != GroupType.SUBSCRIPTION && !it.ungrouped }
-                }
-            }
-            list = when (sortMode) {
-                SORT_ASC -> list.sortedWith { a, b ->
-                    if (a.ungrouped) -1 else if (b.ungrouped) 1
-                    else a.displayName().compareTo(b.displayName(), ignoreCase = true)
-                }
-                SORT_DESC -> list.sortedWith { a, b ->
-                    if (a.ungrouped) -1 else if (b.ungrouped) 1
-                    else b.displayName().compareTo(a.displayName(), ignoreCase = true)
-                }
-                else -> list
-            }
-            groupList = list.toMutableList()
-            notifyDataSetChanged()
-        }
-
-        fun move(from: Int, to: Int) {
-            if (from < to) {
-                for (i in from until to) {
-                    Collections.swap(groupList, i, i + 1)
-                }
-            } else {
-                for (i in from downTo to + 1) {
-                    Collections.swap(groupList, i, i - 1)
-                }
-            }
-            notifyItemMoved(from, to)
-        }
-
-        fun commitMove() {
-            lifecycleScope.launch(Dispatchers.IO) {
-                groupList.forEachIndexed { index, group ->
-                    group.order = index
-                    SagerDatabase.groupDao.updateGroup(group)
-                }
-            }
-        }
-
-        fun remove(index: Int) {
-            val group = groupList.removeAt(index)
-            rawGroupList.remove(group)
-            notifyItemRemoved(index)
-        }
-
-        override fun undo(data: List<Pair<Int, ProxyGroup>>) {
-            lifecycleScope.launch(Dispatchers.IO) {
-                data.forEach { (_, group) ->
-                    SagerDatabase.groupDao.createGroup(group)
-                }
-                reloadGroups()
-            }
-        }
-
-        override fun commit(data: List<Pair<Int, ProxyGroup>>) {
-            lifecycleScope.launch(Dispatchers.IO) {
-                data.forEach { (_, group) ->
-                    GroupManager.deleteGroup(group.id)
-                }
-            }
-        }
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): GroupHolder {
-            return GroupHolder(
-                LayoutGroupItemBinding.inflate(layoutInflater, parent, false)
-            )
-        }
-
-        override fun onBindViewHolder(holder: GroupHolder, position: Int) {
-            holder.bind(groupList[position])
-        }
-
-        override fun getItemCount(): Int = groupList.size
-
-        override fun onGroupCreated(group: ProxyGroup) {
-            reloadGroups()
-        }
-
-        override fun onGroupUpdated(group: ProxyGroup) {
-            val index = groupList.indexOfFirst { it.id == group.id }
-            if (index != -1) {
-                groupList[index] = group
-                notifyItemChanged(index)
-            }
-        }
-
-        override fun onGroupRemoved(groupId: Long) {
-            val index = groupList.indexOfFirst { it.id == groupId }
-            if (index != -1) {
-                groupList.removeAt(index)
-                notifyItemRemoved(index)
-            }
-        }
-    }
 }
