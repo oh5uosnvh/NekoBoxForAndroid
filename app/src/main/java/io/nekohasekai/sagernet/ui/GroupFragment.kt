@@ -25,7 +25,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.isGone
 import androidx.core.view.isInvisible
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.FixedLinearLayoutManager
+import io.nekohasekai.sagernet.widget.FixedLinearLayoutManager
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
