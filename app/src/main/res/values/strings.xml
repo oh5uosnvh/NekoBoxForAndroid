@@ -1,7 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">NekoBoxF</string>
+    <string name="app_name" translatable="false">Neko</string>
     <string name="app_name_long" translatable="false">NekoBoxF for Android</string>
+    <string name="search_scope_group">分组</string>
+    <string name="search_scope_global">全局</string>
+    <string name="search_scope_hint">切换搜索范围</string>
+    <string name="jump_to_group">跳转分组</string>
+    <string name="quick_group_list">分组</string>
+    <string name="topbar_drawer_desc">☰ 菜单</string>
+    <string name="topbar_jump_desc">⊙ 跳转分组</string>
+    <string name="topbar_group_desc">☴ 分组列表</string>
+    <string name="topbar_search_desc">🔍 搜索</string>
+    <string name="topbar_add_desc">📄 添加配置</string>
+    <string name="topbar_more_desc">⋮ 更多</string>
+    <string name="search">搜索</string>
+    <string name="jump_hint_first">已跳到第一个分组</string>
+    <string name="jump_hint_last">已跳到最后一个分组</string>
+    <string name="jump_hint_selected">已跳到当前节点所在分组</string>
+    <string name="jump_hint_none">当前没有分组</string>
     <string name="app_desc">The universal proxy toolchain for Android, written in Kotlin.</string>
     <string name="project">Project</string>
     <string name="github">Source code</string>
@@ -696,4 +712,10 @@
     <string name="snell_quic_proxy_summary">v6 only: legacy v5 QUIC Proxy compatibility</string>
     <string name="snell_reuse_summary">v4-v6 only</string>
 
+    <string name="clear">Clear</string>
+
+    <string name="filter_default">Default</string>
+    <string name="filter_local">Local</string>
+    <string name="sort_ascending">Ascending</string>
+    <string name="sort_descending">Descending</string>
 </resources>

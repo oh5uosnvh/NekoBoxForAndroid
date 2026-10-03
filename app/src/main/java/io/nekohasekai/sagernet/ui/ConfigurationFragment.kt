@@ -16,12 +16,14 @@ import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuItem
 import android.view.MotionEvent
+import android.view.inputmethod.InputMethodManager
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.widget.PopupMenu
 import androidx.appcompat.widget.SearchView
@@ -157,6 +159,71 @@ class ConfigurationFragment @JvmOverloads constructor(
     lateinit var tabLayout: TabLayout
     lateinit var groupPager: ViewPager2
 
+    /** 顶栏 ⊙ / 分组 控件，见 TopBarController */
+    private val topBar = TopBarController(this)
+
+    /** 搜索框内的 [分组/全局] 范围切换 */
+    private val searchScope = SearchScopeController()
+    /**
+     * 搜索展开时接管返回键。
+     *
+     * 原版是 AppCompat 的可折叠 action view，SearchView 内部会处理 BACK
+     * （SearchAutoComplete.onKeyPreIme），所以按返回能收起搜索框。
+     * 现在顶栏整排自绘、SearchView 不再挂在菜单项上，那条内部处理不会
+     * 生效，必须自己接：只在「搜索展开」时启用，这样其它情况下返回键
+     * 行为完全不受影响。
+     */
+    private val searchBackCallback = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() {
+            topBar.collapseSearch()
+        }
+    }
+
+    /** TopBarController 在搜索展开/收起时通知这里 */
+    fun onSearchStateChanged(expanded: Boolean) {
+        searchBackCallback.isEnabled = expanded
+    }
+
+    /** 兜底：交给顶层 Activity 弹溢出菜单 */
+    private fun popupToolbarOverflow() {
+        var ctx: android.content.Context? = requireContext()
+        while (ctx is android.content.ContextWrapper) {
+            if (ctx is MainActivity) {
+                ctx.openOptionsMenu()
+                return
+            }
+            ctx = ctx.baseContext
+        }
+        Logs.w("no MainActivity host found for overflow menu")
+    }
+
+    /** 滚到当前选中节点；不在可见范围内则滚到它，否则回顶部 */
+    private fun scrollToSelectedProfile() {
+        val fragment = getCurrentGroupFragment() ?: return
+        val selectedProxy = selectedItem?.id ?: DataStore.selectedProxy
+        val selectedProfileIndex =
+            fragment.adapter?.configurationIdList?.indexOf(selectedProxy) ?: -1
+
+        if (selectedProfileIndex != -1) {
+            val layoutManager = fragment.layoutManager
+            if (layoutManager is LinearLayoutManager) {
+                val first = layoutManager.findFirstVisibleItemPosition()
+                val last = layoutManager.findLastVisibleItemPosition()
+                if (selectedProfileIndex !in first..last) {
+                    fragment.configurationListView.scrollTo(selectedProfileIndex, true)
+                    return
+                }
+            } else {
+                fragment.configurationListView.scrollTo(selectedProfileIndex, true)
+                return
+            }
+        }
+        fragment.configurationListView.scrollTo(0)
+    }
+
+
+    /** 🔍 那个可折叠菜单项，收起搜索框时要用它 collapseActionView() */
+
     val alwaysShowAddress by lazy { DataStore.alwaysShowAddress }
 
     @Volatile
@@ -268,7 +335,10 @@ class ConfigurationFragment @JvmOverloads constructor(
 
     fun getCurrentGroupFragment(): GroupFragment? {
         return try {
-            childFragmentManager.findFragmentByTag("f" + DataStore.selectedGroup) as GroupFragment?
+            val byTag = childFragmentManager.findFragmentByTag("f" + DataStore.selectedGroup) as? GroupFragment
+            if (byTag != null) return byTag
+            val currentIdx = if (::groupPager.isInitialized) groupPager.currentItem else -1
+            if (currentIdx >= 0 && ::adapter.isInitialized) adapter.getGroupFragment(currentIdx) else null
         } catch (e: Exception) {
             Logs.e(e)
             null
@@ -301,12 +371,77 @@ class ConfigurationFragment @JvmOverloads constructor(
         }
     }
 
+
     override fun onQueryTextChange(query: String): Boolean {
-        getCurrentGroupFragment()?.adapter?.filter(query)
+        onSearchQueryChanged(query)
         return false
     }
 
     override fun onQueryTextSubmit(query: String): Boolean = false
+
+    /**
+     * 按当前搜索范围过滤。
+     *
+     * - 分组：只过滤当前分组页
+     * - 全局：全库搜索匹配的节点，并直接在当前可见列表展示出来（不跳转任何分组Tab，所有命中节点集中展示！）
+     *
+     * 同时统计当前匹配到的节点总数，联动 [删除] 按钮从 [分组/全局] 背后滑出或缩回。
+     */
+    private fun onSearchQueryChanged(query: String) {
+        val totalHits = if (searchScope.current == SearchScopeController.Scope.GROUP) {
+            val a = getCurrentGroupFragment()?.adapter
+            a?.filter(query, global = false)
+            if (query.isBlank()) 0 else (a?.configurationIdList?.size ?: 0)
+        } else {
+            // 全局搜索：让当前正在看的分组列表直接展示全库匹配的所有节点！
+            val a = getCurrentGroupFragment()?.adapter
+            a?.filter(query, global = true)
+            if (query.isBlank()) 0 else (a?.configurationIdList?.size ?: 0)
+        }
+
+        // 有搜索词且命中了节点才滑出删除按钮，否则缩回去
+        searchScope.updateDeleteVisibility(query.isNotBlank() && totalHits > 0)
+    }
+
+    /** 批量删除当前搜索匹配出的所有节点 */
+    private fun deleteCurrentSearchResults() {
+        val query = topBar.searchField?.query?.toString().orEmpty()
+        if (query.isBlank()) return
+
+        val a = getCurrentGroupFragment()?.adapter ?: return
+        val toDelete = a.configurationIdList.mapNotNull { a.configurationList[it] }
+
+        if (toDelete.isEmpty()) return
+
+        val msg = getString(R.string.delete_confirm_prompt) + "\n" +
+                toDelete.take(10).joinToString("\n") { it.displayName().orEmpty() } +
+                if (toDelete.size > 10) "\n..." else ""
+
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.confirm)
+            .setMessage(msg)
+            .setPositiveButton(R.string.yes) { _, _ ->
+                // 先从当前 adapter 中移除
+                for (profile in toDelete) {
+                    val index = a.configurationIdList.indexOf(profile.id)
+                    if (index >= 0) {
+                        a.configurationIdList.removeAt(index)
+                        a.configurationList.remove(profile.id)
+                        a.notifyItemRemoved(index)
+                    }
+                }
+                // 数据库真实删除
+                runOnDefaultDispatcher {
+                    for (profile in toDelete) {
+                        ProfileManager.deleteProfile2(profile.groupId, profile.id)
+                    }
+                }
+                // 删完后刷新搜索结果和删除按钮状态
+                onSearchQueryChanged(query)
+            }
+            .setNegativeButton(R.string.no, null)
+            .show()
+    }
 
     @SuppressLint("DetachAndAttachSameFragment")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -328,9 +463,36 @@ class ConfigurationFragment @JvmOverloads constructor(
         super.onViewCreated(view, savedInstanceState)
 
         if (!select) {
+            // 菜单仍然 inflate 到 toolbar 上 —— checkOrderMenu / global_mode
+            // 勾选都要 findItem()。但整条 toolbar 会被 TopBarController 设为
+            // GONE：它一个 item 都不能显示，显示了就会和自绘那一排重叠，
+            // 而且只要存在非 always 项，AppCompat 还会自动补一个 ⋮ 溢出按钮。
+            // 📄+ / ⋮ 的弹出改由我们指定锚点（AppCompatPopupWindowHelper）。
             toolbar.inflateMenu(R.menu.add_profile_menu)
             toolbar.menu.findItem(R.id.action_global_mode)?.isChecked = DataStore.globalMode
             toolbar.setOnMenuItemClickListener(this)
+
+            topBar.attach(toolbar, object : TopBarController.Callbacks {
+                override fun onOpenDrawer() {
+                    (requireActivity() as MainActivity).openDrawer()
+                }
+
+                override fun onTitleClicked() = scrollToSelectedProfile()
+
+                override fun onAddClicked(anchor: View) {
+                    AppCompatPopupWindowHelper.show(
+                        toolbar.menu.findItem(R.id.action_add)?.subMenu, anchor,
+                        onClick = { onMenuItemClick(it) },
+                    ) { popupToolbarOverflow() }
+                }
+
+                override fun onMoreClicked(anchor: View) {
+                    AppCompatPopupWindowHelper.show(
+                        toolbar.menu.findItem(R.id.action_misc)?.subMenu, anchor,
+                        onClick = { onMenuItemClick(it) },
+                    ) { popupToolbarOverflow() }
+                }
+            })
         } else {
             toolbar.setTitle(titleRes)
             toolbar.setNavigationIcon(R.drawable.ic_navigation_close)
@@ -339,17 +501,6 @@ class ConfigurationFragment @JvmOverloads constructor(
             }
         }
 
-        val searchView = toolbar.findViewById<SearchView>(R.id.action_search)
-        if (searchView != null) {
-            searchView.setOnQueryTextListener(this)
-            searchView.maxWidth = Int.MAX_VALUE
-
-            searchView.setOnQueryTextFocusChangeListener { _, hasFocus ->
-                if (!hasFocus) {
-                    cancelSearch(searchView)
-                }
-            }
-        }
 
         groupPager = view.findViewById(R.id.group_pager)
         tabLayout = view.findViewById(R.id.group_tab)
@@ -398,6 +549,11 @@ class ConfigurationFragment @JvmOverloads constructor(
 
         }
 
+        // 注册返回键拦截（默认 disabled，仅搜索展开时生效）
+        requireActivity().onBackPressedDispatcher.addCallback(
+            viewLifecycleOwner, searchBackCallback,
+        )
+
         DataStore.profileCacheStore.registerChangeListener(this)
     }
 
@@ -431,6 +587,9 @@ class ConfigurationFragment @JvmOverloads constructor(
             GroupManager.removeListener(adapter)
             ProfileManager.removeListener(adapter)
         }
+
+        topBar.detach()
+        searchScope.detach()
 
         super.onDestroy()
     }
@@ -1300,6 +1459,12 @@ class ConfigurationFragment @JvmOverloads constructor(
             }
         }
 
+        /** 按页序号取已创建的 GroupFragment，未创建则 null */
+        fun getGroupFragment(position: Int): GroupFragment? {
+            if (position !in groupList.indices) return null
+            return groupFragments[groupList[position].id]
+        }
+
         override fun getItemId(position: Int): Long {
             return groupList[position].id
         }
@@ -1335,6 +1500,14 @@ class ConfigurationFragment @JvmOverloads constructor(
             val index = groupList.indexOfFirst { it.id == group.id }
             if (index == -1) return
 
+            // 关键：把新对象写回 groupList。
+            //
+            // 改分组名后返回，☴ 快速列表读的是 groupList（TopBarController#groups()
+            // 直接拿 adapter.groupList），而这里原先只更新了 tab 文案、没动 groupList，
+            // 于是拿到的还是改名前那个旧对象 —— 表现就是「名字像没改一样」，
+            // 直到列表被整体重建（切页/进设置再回来）才刷新。
+            // 就地替换保持原有顺序，同时把 ☴ 列表和 tab 一起更新掉。
+            groupList[index] = group
             tabLayout.post {
                 tabLayout.getTabAt(index)?.text = group.displayName()
             }
@@ -1882,19 +2055,34 @@ class ConfigurationFragment @JvmOverloads constructor(
 
             private val updated = HashSet<ProxyEntity>()
 
-            fun filter(name: String) {
+            fun filter(name: String, global: Boolean = false) {
                 if (name.isEmpty()) {
                     reloadProfiles()
                     return
                 }
-                configurationIdList.clear()
                 val lower = name.lowercase()
-                configurationIdList.addAll(configurationList.filter {
-                    it.value.displayName().lowercase().contains(lower) ||
-                            it.value.displayType().lowercase().contains(lower) ||
-                            it.value.displayAddress().lowercase().contains(lower)
-                }.keys)
-                notifyDataSetChanged()
+                if (global) {
+                    // 全局搜索：直接从全库查询匹配节点，装填进当前可见列表展示
+                    val allProfiles = SagerDatabase.proxyDao.getAll()
+                    val matched = allProfiles.filter {
+                        it.displayName().lowercase().contains(lower) ||
+                                it.displayType().lowercase().contains(lower) ||
+                                it.displayAddress().lowercase().contains(lower)
+                    }
+                    configurationList.clear()
+                    matched.forEach { configurationList[it.id] = it }
+                    configurationIdList.clear()
+                    configurationIdList.addAll(matched.map { it.id })
+                    notifyDataSetChanged()
+                } else {
+                    configurationIdList.clear()
+                    configurationIdList.addAll(configurationList.filter {
+                        it.value.displayName().lowercase().contains(lower) ||
+                                it.value.displayType().lowercase().contains(lower) ||
+                                it.value.displayAddress().lowercase().contains(lower)
+                    }.keys)
+                    notifyDataSetChanged()
+                }
             }
 
             fun move(from: Int, to: Int) {
@@ -2562,9 +2750,44 @@ class ConfigurationFragment @JvmOverloads constructor(
             }
         }
 
-    private fun cancelSearch(searchView: SearchView) {
-        searchView.onActionViewCollapsed()
-        searchView.clearFocus()
+    /**
+     * 顶栏搜索框。展开时才由 TopBarController 创建。
+     * 之前它绑在 action_search 菜单项上，还踩过「折叠态下 action_search
+     * 其实是 ActionMenuItemView」的 ClassCastException；现在整排自绘，
+     * 搜索框由 TopBarController 自己管理生命周期。
+     */
+    fun createSearchView(): SearchView = SearchView(requireContext()).apply {
+        maxWidth = Int.MAX_VALUE
+        setOnQueryTextListener(this@ConfigurationFragment)
+        searchScope.attach(
+            searchView = this,
+            onScopeChanged = { scope ->
+                onSearchQueryChanged(query?.toString().orEmpty())
+            },
+            onDeleteClicked = {
+                deleteCurrentSearchResults()
+            }
+        )
+    }
+
+    /** 收起搜索框时清空过滤状态 */
+    fun clearSearchQuery() {
+        onSearchQueryChanged("")
+    }
+
+    fun showKeyboard(v: View) {
+        val imm = requireContext().getSystemService(
+            android.content.Context.INPUT_METHOD_SERVICE
+        ) as InputMethodManager
+        imm.showSoftInput(v, InputMethodManager.SHOW_IMPLICIT)
+    }
+
+    fun hideKeyboard() {
+        val imm = requireContext().getSystemService(
+            android.content.Context.INPUT_METHOD_SERVICE
+        ) as InputMethodManager
+        val token = view?.windowToken ?: return
+        imm.hideSoftInputFromWindow(token, 0)
     }
 
 }

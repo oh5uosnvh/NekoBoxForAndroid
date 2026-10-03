@@ -40,6 +40,7 @@ import io.nekohasekai.sagernet.fmt.AbstractBean
 import io.nekohasekai.sagernet.ktx.*
 import io.nekohasekai.sagernet.ui.ThemedActivity
 import io.nekohasekai.sagernet.widget.ListListener
+import io.nekohasekai.sagernet.widget.CopyableEditTextPreferenceDialog
 import kotlinx.parcelize.Parcelize
 import kotlin.properties.Delegates
 
@@ -374,6 +375,11 @@ abstract class ProfileSettingsActivity<T : AbstractBean>(
         override fun onDisplayPreferenceDialog(preference: Preference) {
             activity?.apply {
                 if (displayPreferenceDialog(preference)) return
+            }
+            if (preference is EditTextPreference) {
+                CopyableEditTextPreferenceDialog.newInstance(preference.key, this)
+                    .show(parentFragmentManager, CopyableEditTextPreferenceDialog.DIALOG_TAG)
+                return
             }
             super.onDisplayPreferenceDialog(preference)
         }

@@ -34,4 +34,9 @@
     <color name="card_elevated_yellow">#2C2A17</color>
     <color name="card_elevated_black">#151515</color>
     <color name="card_elevated_verdant_mint">#10241C</color>
+    <!-- 「删除」二字：夜间用浅红，保证在主题色底上可读 -->
+
+    <!-- 连体按钮 / 左滑删除按钮的描边：**夜间白**（日间在 values/colors.xml 是黑） -->
+    <color name="segment_stroke">#4DFFFFFF</color>
+
 </resources>

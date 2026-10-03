@@ -97,6 +97,11 @@ fun Project.setupCommon() {
                     applicationIdSuffix = "debug"
                     debuggable(true)
                     jniDebuggable(true)
+                    splits.abi {
+                        reset()
+                        isEnable = true
+                        isUniversalApk = true
+                    }
                 }
             }
             applicationVariants.forEach { variant ->
@@ -170,10 +175,7 @@ fun Project.setupApp() {
             reset()
             isEnable = true
             isUniversalApk = false
-            include("armeabi-v7a")
             include("arm64-v8a")
-            include("x86")
-            include("x86_64")
         }
 
         flavorDimensions += "vendor"

@@ -1,17 +1,46 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
+    <!--
+        🔍 搜索。
+        关键：必须带 collapseActionView。
+        下面 cancelSearch() 调的是 searchView.onActionViewCollapsed()，
+        那套逻辑只在「可折叠 action view」下成立。原来只写了
+        showAsAction="always"，SearchView 会常驻展开、吃掉整条工具栏宽度，
+        把后面的 📄+ / ⋮ 挤进 overflow —— 布局乱的根因就在这。
+        加上 collapseActionView 后：平时是一枚 🔍 图标，点一下才展开成
+        输入框（右侧出 X 收起），收回时走 onActionViewCollapsed()。
+        android:icon 是折叠态显示的那枚图标，不能省。
+    -->
     <item
         android:id="@+id/action_search"
-        android:title="@android:string/search_go"
+        android:icon="@drawable/ic_baseline_search_24"
+        android:title="@string/search"
         app:actionViewClass="androidx.appcompat.widget.SearchView"
-        app:showAsAction="always" />
+        app:showAsAction="always|collapseActionView" />
 
+    <!--
+        action_jump_group 的菜单项已删除。
+        它 showAsAction="always" 会常驻工具栏，且 onMenuItemClick 里写死
+        topBar.jumpToFirst()，导致工具栏上出现两个 ⊙：用户点到的总是这个
+        「永远跳第一个」的菜单项，而真正带双态循环的自绘 ⊙ 被挤在后面。
+        现在 ⊙ 只由 TopBarController 的自绘视图承担。
+    -->
+
+    <!--
+        action_group_picker（☴ 分组快速列表）的菜单项已整体删除。
+        原因：☴ 现在由 TopBarController 用 ic_neko_group 自绘在顶栏第 4 位，
+        这里再留一个 item 就是重复入口。
+        之前曾把它设成 showAsAction="never"，结果更糟 —— AppCompat 只要看到
+        有「不显示成 action」的 item 就会自动补一个 ⋮ 溢出按钮，顶栏右端
+        因此出现两个 ⋮（一个是 action_misc，一个是它带来的溢出按钮）。
+        删掉之后菜单里全是 showAsAction="always" 的项，不再生成溢出按钮。
+    -->
     <item
         android:id="@+id/action_add"
         android:icon="@drawable/ic_action_note_add"
         android:title="@string/add_profile"
-        app:showAsAction="ifRoom">
+        app:showAsAction="always">
         <menu>
             <item
                 android:id="@+id/action_scan_qr_code"

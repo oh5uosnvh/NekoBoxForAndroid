@@ -81,3 +81,24 @@ jobs:
         with:
           name: APKs
           path: ${{ env.APK }}
+      - name: Decode keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/nekobox-fork.jks"
+      - name: Sign APKs
+        run: |
+          BT=$(ls -d "${ANDROID_HOME}"/build-tools/* | sort -V | tail -1)
+          echo "using build-tools: $BT"
+          mkdir -p "$RUNNER_TEMP/signed"
+          for f in $(find "${{ env.APK }}" -name '*.apk'); do
+            out="$RUNNER_TEMP/signed/$(basename "$f" | sed 's/-unsigned\.apk$/-signed.apk/')"
+            "$BT/apksigner" sign \
+              --ks "$RUNNER_TEMP/nekobox-fork.jks" \
+              --ks-key-alias "${{ secrets.ALIAS_NAME }}" \
+              --ks-pass "pass:${{ secrets.KEYSTORE_PASS }}" \
+              --key-pass "pass:${{ secrets.ALIAS_PASS }}" \
+              --out "$out" "$f"
+            "$BT/apksigner" verify --print-certs "$out"
+          done
+      - uses: actions/upload-artifact@v5
+        with:
+          name: APKs-signed
+          path: ${{ runner.temp }}/signed/*

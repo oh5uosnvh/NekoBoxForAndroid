@@ -56,6 +56,29 @@
                     tools:text="user name" />
             </LinearLayout>
 
+            <!--
+                排序按钮 ☷（在 ✏️ 左边）。
+                按住 ☷ 拖动 = 立刻开始自定义排序，跟「长按卡片再拖」是同一套拖动。
+
+                为什么用 TouchListener 而不是 ClickListener：
+                那样得先抬手才触发，就成了「点一下、松手、再拖」。这里直接吃下
+                ACTION_DOWN 交给 ItemTouchHelper.startDrag()，手指不移开就一直是
+                按住状态，往后一拖就是拖动，手感与长按完全一致。
+                详见 GroupFragment.GroupHolder#bind 里的注释。
+
+                属性与 ✏️/⋮ 保持一致（12dp 内边距、top 对齐），三个按钮同高。
+            -->
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/group_sort"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/group_order"
+                android:focusable="false"
+                android:padding="12dp"
+                app:srcCompat="@drawable/ic_group_sort" />
+
             <androidx.appcompat.widget.AppCompatImageView
                 android:id="@+id/edit"
                 android:layout_width="wrap_content"
@@ -128,5 +151,45 @@
         </LinearLayout>
 
     </LinearLayout>
+
+    <!--
+        左滑展开的「删除」按钮。
+
+        它是「覆盖层」而不是上面那排的兄弟节点 —— 宽度要能独立伸缩，
+        不能把分组名/☷/✏️/⋮ 挤动。所以直接挂在 MaterialCardView
+        （本身就是 FrameLayout）下，用 layout_gravity 定位到右上角。
+
+        初始宽度就是满宽（@dimen/group_delete_reveal_width = 96dp = ⋮48 + ✏️48，
+        正好覆盖到铅笔的位置），靠 translationX 整块移出卡片右边缘来「收起」，
+        所以宽度全程不变 —— 改宽度的做法会让「删除」二字在窄的时候折成竖排。
+    -->
+    <androidx.appcompat.widget.LinearLayoutCompat
+        android:id="@+id/group_delete"
+        android:layout_width="@dimen/group_delete_reveal_width"
+        android:layout_height="48dp"
+        android:layout_gravity="top|end"
+        android:background="@drawable/bg_group_delete"
+        android:clickable="true"
+        android:focusable="false"
+        android:gravity="center">
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_marginEnd="6dp"
+            android:contentDescription="@null"
+            android:tint="?android:attr/textColorPrimary"
+            app:srcCompat="@drawable/ic_group_delete" />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:maxLines="1"
+            android:singleLine="true"
+            android:text="@string/delete"
+            android:textColor="?android:attr/textColorPrimary"
+            android:textSize="14sp" />
+
+    </androidx.appcompat.widget.LinearLayoutCompat>
 
 </com.google.android.material.card.MaterialCardView>

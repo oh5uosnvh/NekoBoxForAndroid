@@ -37,6 +37,7 @@ import io.nekohasekai.sagernet.ktx.runOnDefaultDispatcher
 import io.nekohasekai.sagernet.utils.PackageCache
 import io.nekohasekai.sagernet.widget.AppListPreference
 import io.nekohasekai.sagernet.widget.ListListener
+import io.nekohasekai.sagernet.widget.CopyableEditTextPreferenceDialog
 import io.nekohasekai.sagernet.widget.OutboundPreference
 import kotlinx.parcelize.Parcelize
 import moe.matsuri.nb4a.ui.EditConfigPreference
@@ -378,6 +379,11 @@ class RouteSettingsActivity(
         override fun onDisplayPreferenceDialog(preference: Preference) {
             activity?.apply {
                 if (displayPreferenceDialog(preference)) return
+            }
+            if (preference is EditTextPreference) {
+                CopyableEditTextPreferenceDialog.newInstance(preference.key, this)
+                    .show(parentFragmentManager, CopyableEditTextPreferenceDialog.DIALOG_TAG)
+                return
             }
             super.onDisplayPreferenceDialog(preference)
         }

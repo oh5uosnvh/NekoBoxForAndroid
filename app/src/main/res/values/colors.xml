@@ -329,4 +329,29 @@
     <color name="card_elevated_black">#EEEEEE</color>
     <color name="card_elevated_verdant_mint">#EBF9F3</color>
 
+    <!--
+        分组卡片左滑展开的「删除」按钮。
+        取自用户参考图的采样值（直接对图片取色，不是肉眼估）：
+            背景 #F5D9E5 / 描边 #D597AE / 文字与图标 #862246
+    -->
+    <!--
+        左滑「删除」按钮 & 顶栏连体按钮的配色。
+
+        原来是固定的粉色（#F5D9E5 / #D597AE / #862246），现在全部改成
+        **主题驱动**：
+          · background / stroke → 引用 res/color/ 下的 state-list，
+            里面用 ?attr/colorPrimary 叠透明度（见 res/color/group_delete_*.xml）
+          · text → 引用 @color/on_primary_container，
+            日间深色、夜间浅色，保证在主题色底上始终可读
+        这样换主题（含日间/夜间、各种配色）会自动跟着变。
+    -->
+    <!-- 「删除」二字的颜色：日间深红，夜间在 values-night/colors.xml 里换成浅红 -->
+
+    <!--
+        连体按钮 / 左滑删除按钮的描边：**日间黑**。
+        夜间在 values-night/colors.xml 里换成白。
+        用 30% 透明而不是全黑 —— 在主题色底上既看得清、又不至于太生硬。
+    -->
+    <color name="segment_stroke">#4D000000</color>
+
 </resources>

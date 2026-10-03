@@ -138,7 +138,9 @@ class MainActivity : ThemedActivity(),
             }
         }
 
-        if (isPreview) {
+        // MOD-24: 不再提示预览版信息（本构建为 MOD 版本，非官方预览版）
+
+        if (false && isPreview) {
             MaterialAlertDialogBuilder(this)
                 .setTitle(BuildConfig.PRE_VERSION_NAME)
                 .setMessage(R.string.preview_version_hint)
@@ -545,6 +547,15 @@ class MainActivity : ThemedActivity(),
         GroupManager.userInterface = null
         DataStore.configurationStore.unregisterChangeListener(this)
         connection.disconnect(this)
+    }
+
+    /**
+     * 打开左侧抽屉。
+     * 顶栏的 ☰ 由 TopBarController 自绘（原先是 Toolbar 的 navigationIcon，
+     * 但它自带 48dp 按钮宽度、和最左边对不齐），点击后回调到这里。
+     */
+    fun openDrawer() {
+        binding.drawerLayout.open()
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {

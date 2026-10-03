@@ -19,3 +19,8 @@ jniLibs/
 # submodules
 /external
 .hev-build/
+
+# native core sources fetched by buildScript/lib/core (never committed)
+/sing-box
+/libneko
+
