@@ -333,10 +333,10 @@ class GroupFragment : ToolbarFragment(R.layout.layout_group),
         addPickerRow(content, filterRow(ctx.getString(R.string.filter_default), sortMode == SORT_DEFAULT).apply {
             setOnClickListener { setSort(SORT_DEFAULT) }
         })
-        addPickerRow(content, filterRow(ctx.getString(R.string.sort_ascending) + " (" + ctx.getString(R.string.group_order_by_name) + ")", sortMode == SORT_ASC).apply {
+        addPickerRow(content, filterRow(ctx.getString(R.string.sort_ascending), sortMode == SORT_ASC).apply {
             setOnClickListener { setSort(SORT_ASC) }
         })
-        addPickerRow(content, filterRow(ctx.getString(R.string.sort_descending) + " (" + ctx.getString(R.string.group_order_by_name) + ")", sortMode == SORT_DESC).apply {
+        addPickerRow(content, filterRow(ctx.getString(R.string.sort_descending), sortMode == SORT_DESC).apply {
             setOnClickListener { setSort(SORT_DESC) }
         })
         showPickerWindow(content, anchor)
@@ -442,6 +442,61 @@ class GroupFragment : ToolbarFragment(R.layout.layout_group),
             }
         }
 
+        private fun getGroupExpireTime(group: ProxyGroup): Long? {
+            if (group.type != GroupType.SUBSCRIPTION) return null
+            val sub = group.subscription ?: return null
+            if (sub.expiryDate != null && sub.expiryDate > 0) {
+                return sub.expiryDate.toLong()
+            }
+            val info = sub.subscriptionUserinfo
+            if (!info.isNullOrBlank()) {
+                val match = "expire=([0-9]+)".toRegex().find(info)
+                if (match != null && match.groupValues.size > 1) {
+                    val exp = match.groupValues[1].toLongOrNull()
+                    if (exp != null && exp > 0L) {
+                        return exp
+                    }
+                }
+            }
+            return null
+        }
+
+        private fun sortGroups(list: List<ProxyGroup>, ascending: Boolean): List<ProxyGroup> {
+            val subsWithExpire = ArrayList<Pair<ProxyGroup, Long>>()
+            val subsNoExpire = ArrayList<ProxyGroup>()
+            val locals = ArrayList<ProxyGroup>()
+
+            for (group in list) {
+                if (group.type == GroupType.SUBSCRIPTION) {
+                    val exp = getGroupExpireTime(group)
+                    if (exp != null) {
+                        subsWithExpire.add(group to exp)
+                    } else {
+                        subsNoExpire.add(group)
+                    }
+                } else {
+                    locals.add(group)
+                }
+            }
+
+            // 订阅有到期时间：按到期时间排序
+            val sortedSubsWithExpire = if (ascending) {
+                subsWithExpire.sortedBy { it.second }.map { it.first }
+            } else {
+                subsWithExpire.sortedByDescending { it.second }.map { it.first }
+            }
+
+            // 本地配置：按创建时间 (id 升序为最早，降序为最新)
+            val sortedLocals = if (ascending) {
+                locals.sortedBy { it.id }
+            } else {
+                locals.sortedByDescending { it.id }
+            }
+
+            // 没有到期时间或者是长期有效的订阅：全排在底下
+            return sortedSubsWithExpire + sortedLocals + subsNoExpire
+        }
+
         private fun rebuildVisible() {
             var list = fullList.toList()
             val filter = filterSubscription
@@ -449,8 +504,8 @@ class GroupFragment : ToolbarFragment(R.layout.layout_group),
                 list = list.filter { (it.type == GroupType.SUBSCRIPTION) == filter }
             }
             list = when (sortMode) {
-                SORT_ASC -> list.sortedBy { it.displayName().lowercase() }
-                SORT_DESC -> list.sortedByDescending { it.displayName().lowercase() }
+                SORT_ASC -> sortGroups(list, ascending = true)
+                SORT_DESC -> sortGroups(list, ascending = false)
                 else -> list
             }
             groupList.clear()
