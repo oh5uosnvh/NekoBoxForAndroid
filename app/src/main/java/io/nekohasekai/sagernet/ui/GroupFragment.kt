@@ -59,6 +59,8 @@ class GroupFragment : ToolbarFragment(R.layout.layout_group),
     private var sortMode = SORT_DEFAULT
 
     companion object {
+        private const val TOPBAR_SEGMENT_LIGHTEN = 0.30f
+
         private const val SORT_DEFAULT = 0
         private const val SORT_ASC = 1
         private const val SORT_DESC = 2
@@ -187,21 +189,18 @@ class GroupFragment : ToolbarFragment(R.layout.layout_group),
     // ------------------------------------------------------ 顶栏：过滤/排序
 
     private fun topbarSegmentBackground(): Drawable {
-        val ta = requireContext().obtainStyledAttributes(
-            intArrayOf(R.attr.colorSurface, android.R.attr.textColorPrimary)
-        )
-        val surface = ta.getColor(0, Color.BLACK)
-        val textPrimary = ta.getColor(1, Color.WHITE)
-        ta.recycle()
-
-        val bg = ColorUtils.blendARGB(surface, textPrimary, 0.08f)
-        val stroke = ContextCompat.getColor(requireContext(), R.color.segment_stroke)
+        val ctx = requireContext()
+        val primary = ctx.getColorAttr(com.google.android.material.R.attr.colorPrimary)
+        val fill = ColorUtils.blendARGB(primary, Color.WHITE, TOPBAR_SEGMENT_LIGHTEN)
 
         return GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = resources.getDimension(R.dimen.group_delete_corner)
-            setColor(bg)
-            setStroke(dp2px(1), stroke)
+            setColor(fill)
+            setStroke(
+                resources.getDimensionPixelSize(R.dimen.card_stroke_width),
+                ContextCompat.getColor(ctx, R.color.segment_stroke),
+            )
         }
     }
 
