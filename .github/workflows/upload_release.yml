@@ -1,9 +1,10 @@
 name: Release Mod APK
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   upload:
@@ -17,8 +18,13 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: ./apk_dir
 
+      - name: List files
+        run: ls -laR ./apk_dir
+
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.4.2-mod-final
-          files: ./apk_dir/*.apk
+          files: ./apk_dir/**
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
