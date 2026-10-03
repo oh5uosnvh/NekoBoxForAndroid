@@ -1,0 +1,24 @@
+name: Release Mod APK
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Artifact from Run
+        uses: actions/download-artifact@v4
+        with:
+          name: NekoBox-mod-arm64
+          run-id: 37132560393
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: ./apk_dir
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.4.2-mod-final
+          files: ./apk_dir/*.apk
