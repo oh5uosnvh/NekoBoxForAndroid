@@ -152,44 +152,6 @@
 
     </LinearLayout>
 
-    <!--
-        左滑展开的「删除」按钮。
 
-        它是「覆盖层」而不是上面那排的兄弟节点 —— 宽度要能独立伸缩，
-        不能把分组名/☷/✏️/⋮ 挤动。所以直接挂在 MaterialCardView
-        （本身就是 FrameLayout）下，用 layout_gravity 定位到右上角。
-
-        初始宽度就是满宽（@dimen/group_delete_reveal_width = 96dp = ⋮48 + ✏️48，
-        正好覆盖到铅笔的位置），靠 translationX 整块移出卡片右边缘来「收起」，
-        所以宽度全程不变 —— 改宽度的做法会让「删除」二字在窄的时候折成竖排。
-    -->
-    <androidx.appcompat.widget.LinearLayoutCompat
-        android:id="@+id/group_delete"
-        android:layout_width="@dimen/group_delete_reveal_width"
-        android:layout_height="48dp"
-        android:layout_gravity="top|end"
-        android:background="@drawable/bg_group_delete"
-        android:clickable="true"
-        android:focusable="false"
-        android:gravity="center">
-
-        <androidx.appcompat.widget.AppCompatImageView
-            android:layout_width="18dp"
-            android:layout_height="18dp"
-            android:layout_marginEnd="6dp"
-            android:contentDescription="@null"
-            android:tint="?android:attr/textColorPrimary"
-            app:srcCompat="@drawable/ic_group_delete" />
-
-        <androidx.appcompat.widget.AppCompatTextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:maxLines="1"
-            android:singleLine="true"
-            android:text="@string/delete"
-            android:textColor="?android:attr/textColorPrimary"
-            android:textSize="14sp" />
-
-    </androidx.appcompat.widget.LinearLayoutCompat>
 
 </com.google.android.material.card.MaterialCardView>

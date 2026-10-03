@@ -245,9 +245,9 @@ internal class TopBarController(
         searchIcon = iconView(R.drawable.ic_topbar_search, R.string.topbar_search_desc)
             .apply { setOnClickListener { expandSearch() } }
 
-        // 📄➕ 添加配置
+        // 📄➕ 添加配置（以最右侧 moreIcon 为锚点对齐，确保弹出的拓展列表框完美靠右并与边缘留出间距）
         addIcon = iconView(R.drawable.ic_topbar_add, R.string.topbar_add_desc)
-            .apply { setOnClickListener { v -> callbacks.onAddClicked(v) } }
+            .apply { setOnClickListener { v -> callbacks.onAddClicked(moreIcon ?: v) } }
 
         // ⋮ 溢出菜单
         moreIcon = iconView(R.drawable.ic_topbar_more, R.string.topbar_more_desc)
