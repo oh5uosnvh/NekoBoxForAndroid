@@ -15,6 +15,7 @@ import io.nekohasekai.sagernet.fmt.socks.parseSOCKS
 import io.nekohasekai.sagernet.fmt.trojan.parseTrojan
 import io.nekohasekai.sagernet.fmt.tuic.parseTuic
 import io.nekohasekai.sagernet.fmt.juicity.parseJuicity
+import io.nekohasekai.sagernet.fmt.oppa.parseOppaNode
 import io.nekohasekai.sagernet.fmt.trojan_go.parseTrojanGo
 import io.nekohasekai.sagernet.fmt.v2ray.parseV2Ray
 import moe.matsuri.nb4a.proxy.anytls.parseAnytls
@@ -166,6 +167,32 @@ suspend fun parseProxies(text: String): List<AbstractBean> {
             Logs.d("Try parse vless link: $this")
             runCatching {
                 entities.add(parseV2Ray(this))
+            }.onFailure {
+                Logs.w(it)
+            }
+        } else if (startsWith("x365://")) {
+            Logs.d("Try parse x365 link: $this")
+            runCatching {
+                entities.add(parseV2Ray(this))
+            }.onFailure {
+                Logs.w(it)
+            }
+        } else if (startsWith("heysocks://")) {
+            Logs.d("Try parse heysocks (xhttp) link: $this")
+            runCatching {
+                entities.add(moe.matsuri.nb4a.proxy.xhttp.parseXhttpLink(this))
+            }.onFailure {
+                Logs.w(it)
+            }
+        } else if (startsWith("oppa://")) {
+            Logs.d("Try parse Oppa link: $this")
+            // oppa:// without '@' = base64(JSON) provider subscription payload
+            val isProvider = !substringAfter("oppa://").contains('@')
+            if (isProvider) {
+                throw SubscriptionFoundException(this)
+            }
+            runCatching {
+                entities.add(parseOppaNode(this))
             }.onFailure {
                 Logs.w(it)
             }

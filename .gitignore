@@ -19,8 +19,12 @@ jniLibs/
 # submodules
 /external
 .hev-build/
+.kotlin/
 
 # native core sources fetched by buildScript/lib/core (never committed)
 /sing-box
 /libneko
-
+/sing-anytls-shanlian
+/sing-shadowsocks2-vt
+/fastup-mod
+/oppa-mod

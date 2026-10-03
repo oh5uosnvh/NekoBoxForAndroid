@@ -102,6 +102,12 @@
                         android:id="@+id/action_new_snell"
                         android:title="@string/action_snell" />
                     <item
+                        android:id="@+id/action_new_xhttp"
+                        android:title="xhttp" />
+                    <item
+                        android:id="@+id/action_new_oppa"
+                        android:title="@string/action_oppa" />
+                    <item
                         android:id="@+id/action_new_ssh"
                         android:title="@string/action_ssh" />
                     <item

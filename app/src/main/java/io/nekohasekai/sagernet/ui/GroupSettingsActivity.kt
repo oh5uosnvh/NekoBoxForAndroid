@@ -330,7 +330,7 @@ class GroupSettingsActivity(
         val editingId = DataStore.editingId
         if (editingId == 0L) {
             val newGroup = GroupManager.createGroup(ProxyGroup().apply { serialize() })
-            if (isFromClipboard && newGroup.type == GroupType.SUBSCRIPTION && !newGroup.subscription?.link.isNullOrEmpty()) {
+            if (newGroup.type == GroupType.SUBSCRIPTION && !newGroup.subscription?.link.isNullOrEmpty()) {
                 GroupUpdater.startUpdate(newGroup, true)
             }
         } else if (needSave()) {

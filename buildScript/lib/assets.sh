@@ -14,14 +14,16 @@ get_latest_release() {
 }
 
 ####
-VERSION_GEOIP=`get_latest_release "SagerNet/sing-geoip"`
+# 2026-09-09: GitHub API rate-limit on CI runners returns empty tag -> 404 download.
+# Pin versions instead of querying the API (geoip.db/geosite.db update rarely).
+VERSION_GEOIP=20260812
 echo VERSION_GEOIP=$VERSION_GEOIP
 echo -n $VERSION_GEOIP > geoip.version.txt
 curl -fLSsO https://github.com/SagerNet/sing-geoip/releases/download/$VERSION_GEOIP/geoip.db
 xz -9 geoip.db
 
 ####
-VERSION_GEOSITE=`get_latest_release "SagerNet/sing-geosite"`
+VERSION_GEOSITE=20260908094002
 echo VERSION_GEOSITE=$VERSION_GEOSITE
 echo -n $VERSION_GEOSITE > geosite.version.txt
 curl -fLSsO https://github.com/SagerNet/sing-geosite/releases/download/$VERSION_GEOSITE/geosite.db

@@ -60,7 +60,11 @@ object RawUpdater : GroupUpdater() {
                 ?: error(app.getString(R.string.no_proxies_found_in_subscription))
         } else {
 
-            val response = Libcore.newHttpClient().apply {
+            // 核心（libcore）未就绪时 newHttpClient() 返回 null —— 给出明确错误
+            // 而不是裸 NPE 闪退（用户看到的是「核心未就绪」而非无情报错）
+            val httpClient = Libcore.newHttpClient()
+                ?: error("core not ready")
+            val response = httpClient.apply {
                 trySocks5(
                     DataStore.mixedPort,
                     DataStore.mixedInboundUser,
@@ -87,14 +91,25 @@ object RawUpdater : GroupUpdater() {
             }
             subscription.subscriptionUserinfo = userinfo
 
-            // 修改默认名字
-            if (proxyGroup.name?.startsWith("Subscription #") == true) {
+            // 修改默认名字：无论从剪切板导入还是在分组界面手动新建/更新，只要是默认占位名或空白，均自动读取订阅标题
+            val isDefaultName = proxyGroup.name.isNullOrBlank() ||
+                    proxyGroup.name?.startsWith("Subscription #") == true ||
+                    proxyGroup.name == "My group" ||
+                    proxyGroup.name == app.getString(R.string.group_default)
+            if (isDefaultName) {
                 var remoteName = parseBodyProfileTitle(content)
                 if (remoteName.isBlank()) {
                     remoteName = Util.decodeFilename(Util.getStringBox(response.getHeader("content-disposition")))
                 }
+                if (remoteName.isBlank()) {
+                    val pt = Util.getStringBox(response.getHeader("profile-title"))
+                    if (pt.isNotBlank()) {
+                        remoteName = Util.decodeFilename(pt)
+                    }
+                }
                 if (remoteName.isNotBlank()) {
                     proxyGroup.name = remoteName
+                    SagerDatabase.groupDao.updateGroup(proxyGroup)
                 }
             }
         }
@@ -365,15 +380,65 @@ object RawUpdater : GroupUpdater() {
                             })
                         }
 
-                        "vmess", "vless", "trojan" -> {
+                        "xhttp" -> {
+                            // 黑石 (Heysocks) 官方 xhttp 私有协议
+                            // 拨号目标 = gateway (鉴权网关), server/port 仅落地展示
+                            proxies.add(moe.matsuri.nb4a.proxy.xhttp.XhttpBean().apply {
+                                name = proxy["name"]?.toString()
+
+                                val gateway = proxy["gateway"]?.toString()
+                                if (!gateway.isNullOrBlank()) {
+                                    val idx = gateway.lastIndexOf(':')
+                                    if (idx > 0) {
+                                        serverAddress = gateway.substring(0, idx).trim(' ', '[', ']')
+                                        serverPort = gateway.substring(idx + 1).trim().toIntOrNull() ?: 443
+                                    }
+                                }
+                                if (serverAddress.isNullOrBlank()) {
+                                    val gs = proxy["gateway-server"]?.toString()
+                                    val gp = proxy["gateway-port"]?.toString()?.toIntOrNull()
+                                    if (!gs.isNullOrBlank()) {
+                                        serverAddress = gs
+                                        serverPort = gp ?: 443
+                                    }
+                                }
+                                // fallback: dial the landing server directly
+                                if (serverAddress.isNullOrBlank()) {
+                                    serverAddress = proxy["server"]?.toString() ?: "127.0.0.1"
+                                    serverPort = proxy["port"]?.toString()?.toIntOrNull() ?: 443
+                                }
+
+                                landingServer = proxy["server"]?.toString() ?: ""
+                                landingPort = proxy["port"]?.toString()?.toIntOrNull() ?: 0
+
+                                password = proxy["password"]?.toString() ?: ""
+                                sess = proxy["sess"]?.toString() ?: ""
+                                auth = proxy["auth"]?.toString() ?: ""
+                                uuid = proxy["uuid"]?.toString() ?: ""
+                                paddingLen = proxy["padding-len"]?.toString() ?: "8-64"
+
+                                // fake-net.tcp 等价 sess; 若 sess 缺失则回退
+                                if (sess.isNullOrBlank()) {
+                                    (proxy["fake-net"] as? Map<String, Any?>)?.let {
+                                        sess = it["tcp"]?.toString() ?: ""
+                                    }
+                                }
+                            })
+                        }
+
+                        "vmess", "vless", "trojan", "x365", "fastup" -> {
                             val bean = when (proxy["type"] as String) {
                                 "vmess" -> VMessBean()
                                 "vless" -> VMessBean().apply {
                                     alterId = -1 // make it VLESS
                                     packetEncoding = 2 // clash meta default XUDP
                                 }
+                                "x365" -> VMessBean().apply {
+                                    alterId = -2 // make it x365 (365VPN private handshake)
+                                    packetEncoding = 2
+                                }
 
-                                "trojan" -> TrojanBean().apply {
+                                "trojan", "fastup" -> TrojanBean().apply {
                                     security = "tls"
                                 }
 
@@ -388,6 +453,9 @@ object RawUpdater : GroupUpdater() {
                                     "name" -> bean.name = opt.value?.toString()
                                     "password" -> if (bean is TrojanBean) bean.password =
                                         opt.value?.toString()
+
+                                    "mpw" -> if (bean is TrojanBean) bean.mpw =
+                                        opt.value?.toString() ?: ""
 
                                     "uuid" -> if (bean is VMessBean) bean.uuid =
                                         opt.value?.toString()

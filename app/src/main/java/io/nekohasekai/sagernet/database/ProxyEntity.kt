@@ -42,6 +42,11 @@ import moe.matsuri.nb4a.SingBoxOptions.MultiplexOptions
 import moe.matsuri.nb4a.proxy.anytls.AnyTLSBean
 import moe.matsuri.nb4a.proxy.anytls.AnyTLSSettingsActivity
 import moe.matsuri.nb4a.proxy.anytls.toUri
+import io.nekohasekai.sagernet.fmt.oppa.OppaBean
+import io.nekohasekai.sagernet.fmt.oppa.toUri
+import moe.matsuri.nb4a.proxy.xhttp.XhttpBean
+import moe.matsuri.nb4a.proxy.xhttp.XhttpSettingsActivity
+import moe.matsuri.nb4a.proxy.xhttp.toUri
 import moe.matsuri.nb4a.proxy.config.ConfigBean
 import moe.matsuri.nb4a.proxy.config.ConfigSettingActivity
 import moe.matsuri.nb4a.proxy.neko.*
@@ -77,6 +82,8 @@ data class ProxyEntity(
     var wgBean: WireGuardBean? = null,
     var shadowTLSBean: ShadowTLSBean? = null,
     var anyTLSBean: AnyTLSBean? = null,
+    var xhttpBean: XhttpBean? = null,
+    var oppaBean: OppaBean? = null,
     var chainBean: ChainBean? = null,
     var nekoBean: NekoBean? = null,
     var configBean: ConfigBean? = null,
@@ -103,6 +110,8 @@ data class ProxyEntity(
         const val TYPE_ANYTLS = 22
         const val TYPE_JUICITY = 23
         const val TYPE_SNELL = 24
+        const val TYPE_XHTTP = 26
+        const val TYPE_OPPA = 27
 
         const val TYPE_CONFIG = 998
         const val TYPE_NEKO = 999
@@ -189,6 +198,8 @@ data class ProxyEntity(
             TYPE_JUICITY -> juicityBean = KryoConverters.juicityDeserialize(byteArray)
             TYPE_SHADOWTLS -> shadowTLSBean = KryoConverters.shadowTLSDeserialize(byteArray)
             TYPE_ANYTLS -> anyTLSBean = KryoConverters.anyTLSDeserialize(byteArray)
+            TYPE_XHTTP -> xhttpBean = KryoConverters.xhttpDeserialize(byteArray)
+            TYPE_OPPA -> oppaBean = KryoConverters.oppaDeserialize(byteArray)
             TYPE_CHAIN -> chainBean = KryoConverters.chainDeserialize(byteArray)
             TYPE_NEKO -> nekoBean = KryoConverters.nekoDeserialize(byteArray)
             TYPE_CONFIG -> configBean = KryoConverters.configDeserialize(byteArray)
@@ -201,7 +212,11 @@ data class ProxyEntity(
         TYPE_HTTP -> if (httpBean!!.isTLS()) "HTTPS" else "HTTP"
         TYPE_SS -> "Shadowsocks"
         TYPE_SSR -> "ShadowsocksR"
-        TYPE_VMESS -> if (vmessBean!!.isVLESS) "VLESS" else "VMess"
+        TYPE_VMESS -> when {
+            vmessBean!!.isX365() -> "x365"
+            vmessBean!!.isVLESS -> "VLESS"
+            else -> "VMess"
+        }
         TYPE_TROJAN -> "Trojan"
         TYPE_TROJAN_GO -> "Trojan-Go"
         TYPE_MIERU -> "Mieru"
@@ -213,6 +228,8 @@ data class ProxyEntity(
         TYPE_JUICITY -> "Juicity"
         TYPE_SHADOWTLS -> "ShadowTLS"
         TYPE_ANYTLS -> "AnyTLS"
+        TYPE_XHTTP -> "xhttp"
+        TYPE_OPPA -> "Oppa"
         TYPE_CHAIN -> chainName
         TYPE_NEKO -> nekoBean!!.displayType()
         TYPE_CONFIG -> configBean!!.displayType()
@@ -241,6 +258,8 @@ data class ProxyEntity(
             TYPE_JUICITY -> juicityBean
             TYPE_SHADOWTLS -> shadowTLSBean
             TYPE_ANYTLS -> anyTLSBean
+            TYPE_XHTTP -> xhttpBean
+            TYPE_OPPA -> oppaBean
             TYPE_CHAIN -> chainBean
             TYPE_NEKO -> nekoBean
             TYPE_CONFIG -> configBean
@@ -281,6 +300,8 @@ data class ProxyEntity(
             is TuicBean -> toUri()
             is JuicityBean -> toUri()
             is AnyTLSBean -> toUri()
+            is XhttpBean -> toUri()
+            is OppaBean -> toUri()
             is SnellBean -> toUri()
             is NekoBean -> ""
             else -> toUniversalLink()
@@ -434,6 +455,8 @@ data class ProxyEntity(
         juicityBean = null
         shadowTLSBean = null
         anyTLSBean = null
+        xhttpBean = null
+        oppaBean = null
         chainBean = null
         configBean = null
         nekoBean = null
@@ -519,6 +542,16 @@ data class ProxyEntity(
                 anyTLSBean = bean
             }
 
+            is XhttpBean -> {
+                type = TYPE_XHTTP
+                xhttpBean = bean
+            }
+
+            is OppaBean -> {
+                type = TYPE_OPPA
+                oppaBean = bean
+            }
+
             is SnellBean -> {
                 type = TYPE_SNELL
                 snellBean = bean
@@ -563,6 +596,8 @@ data class ProxyEntity(
                 TYPE_JUICITY -> JuicitySettingsActivity::class.java
                 TYPE_SHADOWTLS -> ShadowTLSSettingsActivity::class.java
                 TYPE_ANYTLS -> AnyTLSSettingsActivity::class.java
+                TYPE_XHTTP -> XhttpSettingsActivity::class.java
+                TYPE_OPPA -> OppaSettingsActivity::class.java
                 TYPE_CHAIN -> ChainSettingsActivity::class.java
                 TYPE_CONFIG -> ConfigSettingActivity::class.java
                 TYPE_SNELL -> SnellSettingsActivity::class.java

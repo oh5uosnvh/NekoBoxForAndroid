@@ -749,9 +749,7 @@ class ConfigurationFragment @JvmOverloads constructor(
                             val subscriptionUri = Uri.parse(e.link)
                             val subscriptionLink = subscriptionUri.getQueryParameter("url") ?: e.link
                             val airportName = subscriptionUri.getQueryParameter("name")?.takeIf { it.isNotBlank() }
-                                ?: withTimeoutOrNull(5_000L) {
-                                    withContext(Dispatchers.IO) { fetchAirportName(subscriptionLink) }
-                                }
+                                ?: subscriptionUri.fragment?.takeIf { it.isNotBlank() }
 
                             val group = ProxyGroup(type = GroupType.SUBSCRIPTION)
                             val subscription = SubscriptionBean()
@@ -842,6 +840,14 @@ class ConfigurationFragment @JvmOverloads constructor(
 
             R.id.action_new_snell -> {
                 startActivity(Intent(requireActivity(), SnellSettingsActivity::class.java))
+            }
+
+            R.id.action_new_xhttp -> {
+                startActivity(Intent(requireActivity(), moe.matsuri.nb4a.proxy.xhttp.XhttpSettingsActivity::class.java))
+            }
+
+            R.id.action_new_oppa -> {
+                startActivity(Intent(requireActivity(), io.nekohasekai.sagernet.ui.profile.OppaSettingsActivity::class.java))
             }
 
             R.id.action_new_wg -> {
