@@ -1,39 +1,62 @@
 name: Build Mod APK
-
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
+    name: Build APK
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 0
 
-      - name: Set up JDK 17
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: false
+
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
           distribution: 'temurin'
+          java-version: '21'
 
-      - name: Build arm64 APK
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r25c
+
+      - name: Build LibCore
         run: |
-          chmod +x ./gradlew
-          ./gradlew assembleDebug -x test --stacktrace
+          go version
+          ./run lib core
 
-      - name: Upload Artifact
+      - name: Build APK
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          echo "ndk.dir=${ANDROID_NDK_HOME}" >> local.properties
+          ./run init action gradle
+          ./gradlew assemblePreviewDebug
+          find app/build/outputs/apk -type f -name "*.apk"
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: NekoBox-mod-arm64
-          path: app/build/outputs/apk/debug/*arm64*.apk
+          path: app/build/outputs/apk/**/NekoBox*.apk
 
       - name: Publish to Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.4.2-mod-final
-          files: app/build/outputs/apk/debug/*arm64*.apk
+          files: app/build/outputs/apk/**/NekoBox*.apk
           overwrite_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
