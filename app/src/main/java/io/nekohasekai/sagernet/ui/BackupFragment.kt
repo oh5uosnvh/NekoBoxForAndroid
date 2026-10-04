@@ -696,86 +696,56 @@ class BackupFragment : NamedFragment(R.layout.layout_backup) {
             val profiles = mutableListOf<ProxyEntity>()
             val jsonProfiles = content.getJSONArray("profiles")
             for (i in 0 until jsonProfiles.length()) {
-                runCatching {
-                    val data = Util.b64Decode(jsonProfiles[i] as String)
-                    val parcel = Parcel.obtain()
-                    parcel.unmarshall(data, 0, data.size)
-                    parcel.setDataPosition(0)
-                    val p = ProxyEntity.CREATOR.createFromParcel(parcel)
-                    parcel.recycle()
-                    profiles.add(p)
-                }.onFailure { Logs.w(it) }
+                val data = Util.b64Decode(jsonProfiles[i] as String)
+                val parcel = Parcel.obtain()
+                parcel.unmarshall(data, 0, data.size)
+                parcel.setDataPosition(0)
+                profiles.add(ProxyEntity.CREATOR.createFromParcel(parcel))
+                parcel.recycle()
             }
-            if (profiles.isNotEmpty()) {
-                SagerDatabase.proxyDao.reset()
-                profiles.chunked(500).forEach { batch ->
-                    SagerDatabase.proxyDao.insert(batch)
-                }
-            }
+            SagerDatabase.proxyDao.reset()
+            SagerDatabase.proxyDao.insert(profiles)
 
-            if (content.has("groups")) {
-                val groups = mutableListOf<ProxyGroup>()
-                val jsonGroups = content.getJSONArray("groups")
-                for (i in 0 until jsonGroups.length()) {
-                    runCatching {
-                        val data = Util.b64Decode(jsonGroups[i] as String)
-                        val parcel = Parcel.obtain()
-                        parcel.unmarshall(data, 0, data.size)
-                        parcel.setDataPosition(0)
-                        val g = ProxyGroup.CREATOR.createFromParcel(parcel)
-                        parcel.recycle()
-                        groups.add(g)
-                    }.onFailure { Logs.w(it) }
-                }
-                if (groups.isNotEmpty()) {
-                    SagerDatabase.groupDao.reset()
-                    groups.chunked(500).forEach { batch ->
-                        SagerDatabase.groupDao.insert(batch)
-                    }
-                }
+            val groups = mutableListOf<ProxyGroup>()
+            val jsonGroups = content.getJSONArray("groups")
+            for (i in 0 until jsonGroups.length()) {
+                val data = Util.b64Decode(jsonGroups[i] as String)
+                val parcel = Parcel.obtain()
+                parcel.unmarshall(data, 0, data.size)
+                parcel.setDataPosition(0)
+                groups.add(ProxyGroup.CREATOR.createFromParcel(parcel))
+                parcel.recycle()
             }
+            SagerDatabase.groupDao.reset()
+            SagerDatabase.groupDao.insert(groups)
         }
         if (rule && content.has("rules")) {
             val rules = mutableListOf<RuleEntity>()
             val jsonRules = content.getJSONArray("rules")
             for (i in 0 until jsonRules.length()) {
-                runCatching {
-                    val data = Util.b64Decode(jsonRules[i] as String)
-                    val parcel = Parcel.obtain()
-                    parcel.unmarshall(data, 0, data.size)
-                    parcel.setDataPosition(0)
-                    val r = ParcelizeBridge.createRule(parcel)
-                    parcel.recycle()
-                    rules.add(r)
-                }.onFailure { Logs.w(it) }
+                val data = Util.b64Decode(jsonRules[i] as String)
+                val parcel = Parcel.obtain()
+                parcel.unmarshall(data, 0, data.size)
+                parcel.setDataPosition(0)
+                rules.add(ParcelizeBridge.createRule(parcel))
+                parcel.recycle()
             }
-            if (rules.isNotEmpty()) {
-                SagerDatabase.rulesDao.reset()
-                rules.chunked(500).forEach { batch ->
-                    SagerDatabase.rulesDao.insert(batch)
-                }
-            }
+            SagerDatabase.rulesDao.reset()
+            SagerDatabase.rulesDao.insert(rules)
         }
         if (setting && content.has("settings")) {
             val settings = mutableListOf<KeyValuePair>()
             val jsonSettings = content.getJSONArray("settings")
             for (i in 0 until jsonSettings.length()) {
-                runCatching {
-                    val data = Util.b64Decode(jsonSettings[i] as String)
-                    val parcel = Parcel.obtain()
-                    parcel.unmarshall(data, 0, data.size)
-                    parcel.setDataPosition(0)
-                    val s = KeyValuePair.CREATOR.createFromParcel(parcel)
-                    parcel.recycle()
-                    settings.add(s)
-                }.onFailure { Logs.w(it) }
+                val data = Util.b64Decode(jsonSettings[i] as String)
+                val parcel = Parcel.obtain()
+                parcel.unmarshall(data, 0, data.size)
+                parcel.setDataPosition(0)
+                settings.add(KeyValuePair.CREATOR.createFromParcel(parcel))
+                parcel.recycle()
             }
-            if (settings.isNotEmpty()) {
-                PublicDatabase.kvPairDao.reset()
-                settings.chunked(500).forEach { batch ->
-                    PublicDatabase.kvPairDao.insert(batch)
-                }
-            }
+            PublicDatabase.kvPairDao.reset()
+            PublicDatabase.kvPairDao.insert(settings)
         }
     }
 
