@@ -520,10 +520,6 @@ class ConfigurationFragment @JvmOverloads constructor(
             tab.view.setOnLongClickListener {
                 if (position in adapter.groupList.indices) {
                     val group = adapter.groupList[position]
-                    DataStore.selectedGroup = group.id
-                    if (groupPager.currentItem != position) {
-                        groupPager.setCurrentItem(position, false)
-                    }
                     val targetFragment = io.nekohasekai.sagernet.ui.GroupFragment().apply {
                         arguments = Bundle().apply {
                             putLong(io.nekohasekai.sagernet.ui.GroupFragment.EXTRA_TARGET_GROUP_ID, group.id)
@@ -1476,7 +1472,12 @@ class ConfigurationFragment @JvmOverloads constructor(
                                             }
                                             tabLayout.setScrollPosition(selectedGroupIndex, 0f, true)
                                         }
-                                        isRestoringGroup = false
+                                        tabLayout.post {
+                                            if (selectedGroupIndex in 0 until tabLayout.tabCount) {
+                                                tabLayout.setScrollPosition(selectedGroupIndex, 0f, true)
+                                            }
+                                            isRestoringGroup = false
+                                        }
                                     }
                                 } else {
                                     isRestoringGroup = false
