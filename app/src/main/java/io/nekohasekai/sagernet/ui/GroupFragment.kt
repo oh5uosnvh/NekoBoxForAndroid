@@ -129,6 +129,20 @@ class GroupFragment : ToolbarFragment(R.layout.layout_group),
                 super.clearView(recyclerView, viewHolder)
                 groupAdapter.commitMove()
             }
+
+            override fun interpolateOutOfBoundsScroll(
+                recyclerView: RecyclerView,
+                viewSize: Int,
+                viewSizeOutOfBounds: Int,
+                totalSize: Int,
+                msSinceStartScroll: Long,
+            ): Int {
+                val maxScroll = recyclerView.resources.getDimensionPixelSize(
+                    R.dimen.item_touch_helper_max_drag_scroll_per_frame
+                )
+                val speed = (maxScroll * 0.4f).toInt().coerceAtLeast(1)
+                return if (viewSizeOutOfBounds > 0) speed else -speed
+            }
         })
         itemTouchHelper.attachToRecyclerView(groupListView)
 
@@ -439,6 +453,14 @@ class GroupFragment : ToolbarFragment(R.layout.layout_group),
             rebuildVisible()
             groupListView.post {
                 notifyDataSetChanged()
+                val targetId = arguments?.getLong(EXTRA_TARGET_GROUP_ID, -1L) ?: -1L
+                if (targetId > 0L) {
+                    val targetPos = groupList.indexOfFirst { it.id == targetId }
+                    if (targetPos >= 0) {
+                        groupListView.scrollToPosition(targetPos)
+                    }
+                    arguments?.remove(EXTRA_TARGET_GROUP_ID)
+                }
             }
         }
 
@@ -902,6 +924,10 @@ class GroupFragment : ToolbarFragment(R.layout.layout_group),
             }
 
         }
+    }
+
+    companion object {
+        const val EXTRA_TARGET_GROUP_ID = "target_group_id"
     }
 
 }

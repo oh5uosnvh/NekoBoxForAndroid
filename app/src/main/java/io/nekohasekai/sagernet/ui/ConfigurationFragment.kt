@@ -515,7 +515,19 @@ class ConfigurationFragment @JvmOverloads constructor(
             if (adapter.groupList.size > position) {
                 tab.text = adapter.groupList[position].displayName()
             }
-            tab.view.setOnLongClickListener { // clear toast
+            tab.view.setOnLongClickListener {
+                if (position in adapter.groupList.indices) {
+                    val group = adapter.groupList[position]
+                    val targetFragment = GroupFragment().apply {
+                        arguments = Bundle().apply {
+                            putLong(GroupFragment.EXTRA_TARGET_GROUP_ID, group.id)
+                        }
+                    }
+                    (activity as? MainActivity)?.apply {
+                        displayFragment(targetFragment)
+                        navigation.menu.findItem(R.id.nav_group)?.isChecked = true
+                    }
+                }
                 true
             }
         }.attach()
@@ -1647,6 +1659,20 @@ class ConfigurationFragment @JvmOverloads constructor(
                 ) {
                     super.clearView(recyclerView, viewHolder)
                     adapter?.commitMove()
+                }
+
+                override fun interpolateOutOfBoundsScroll(
+                    recyclerView: RecyclerView,
+                    viewSize: Int,
+                    viewSizeOutOfBounds: Int,
+                    totalSize: Int,
+                    msSinceStartScroll: Long,
+                ): Int {
+                    val maxScroll = recyclerView.resources.getDimensionPixelSize(
+                        R.dimen.item_touch_helper_max_drag_scroll_per_frame
+                    )
+                    val speed = (maxScroll * 0.4f).toInt().coerceAtLeast(1)
+                    return if (viewSizeOutOfBounds > 0) speed else -speed
                 }
 
             })
