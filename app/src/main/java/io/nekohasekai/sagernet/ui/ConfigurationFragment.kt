@@ -667,13 +667,13 @@ class ConfigurationFragment @JvmOverloads constructor(
                         if (isAdded) snackbar(getString(R.string.no_proxies_found_in_file)).show()
                     } else import(proxies)
                 } catch (e: SubscriptionFoundException) {
-                    val act = activity as? MainActivity ?: SagerNet.currentActivity?.get() as? MainActivity
-                    act?.importSubscription(e.link.toUri())
+                    (activity as? MainActivity)?.importSubscription(e.link.toUri())
                 } catch (e: Exception) {
                     Logs.w(e)
                     onMainDispatcher {
-                        val act = activity as? MainActivity ?: SagerNet.currentActivity?.get() as? MainActivity
-                        act?.snackbar(e.readableMessage)?.show()
+                        if (isAdded) {
+                            (activity as? MainActivity)?.snackbar(e.readableMessage)?.show()
+                        }
                     }
                 }
             }
