@@ -696,53 +696,39 @@ class BackupFragment : NamedFragment(R.layout.layout_backup) {
             val profiles = mutableListOf<ProxyEntity>()
             val jsonProfiles = content.getJSONArray("profiles")
             for (i in 0 until jsonProfiles.length()) {
-                try {
-                    val data = Util.b64Decode(jsonProfiles[i] as String)
-                    val parcel = Parcel.obtain()
-                    parcel.unmarshall(data, 0, data.size)
-                    parcel.setDataPosition(0)
-                    profiles.add(ProxyEntity.CREATOR.createFromParcel(parcel))
-                    parcel.recycle()
-                } catch (e: Throwable) {
-                    throw RuntimeException("Error parsing profile[$i]: ${e.message}", e)
-                }
+                val data = Util.b64Decode(jsonProfiles[i] as String)
+                val parcel = Parcel.obtain()
+                parcel.unmarshall(data, 0, data.size)
+                parcel.setDataPosition(0)
+                profiles.add(ProxyEntity.CREATOR.createFromParcel(parcel))
+                parcel.recycle()
             }
             SagerDatabase.proxyDao.reset()
             SagerDatabase.proxyDao.insert(profiles)
 
-            if (content.has("groups")) {
-                val groups = mutableListOf<ProxyGroup>()
-                val jsonGroups = content.getJSONArray("groups")
-                for (i in 0 until jsonGroups.length()) {
-                    try {
-                        val data = Util.b64Decode(jsonGroups[i] as String)
-                        val parcel = Parcel.obtain()
-                        parcel.unmarshall(data, 0, data.size)
-                        parcel.setDataPosition(0)
-                        groups.add(ProxyGroup.CREATOR.createFromParcel(parcel))
-                        parcel.recycle()
-                    } catch (e: Throwable) {
-                        throw RuntimeException("Error parsing group[$i]: ${e.message}", e)
-                    }
-                }
-                SagerDatabase.groupDao.reset()
-                SagerDatabase.groupDao.insert(groups)
+            val groups = mutableListOf<ProxyGroup>()
+            val jsonGroups = content.getJSONArray("groups")
+            for (i in 0 until jsonGroups.length()) {
+                val data = Util.b64Decode(jsonGroups[i] as String)
+                val parcel = Parcel.obtain()
+                parcel.unmarshall(data, 0, data.size)
+                parcel.setDataPosition(0)
+                groups.add(ProxyGroup.CREATOR.createFromParcel(parcel))
+                parcel.recycle()
             }
+            SagerDatabase.groupDao.reset()
+            SagerDatabase.groupDao.insert(groups)
         }
         if (rule && content.has("rules")) {
             val rules = mutableListOf<RuleEntity>()
             val jsonRules = content.getJSONArray("rules")
             for (i in 0 until jsonRules.length()) {
-                try {
-                    val data = Util.b64Decode(jsonRules[i] as String)
-                    val parcel = Parcel.obtain()
-                    parcel.unmarshall(data, 0, data.size)
-                    parcel.setDataPosition(0)
-                    rules.add(ParcelizeBridge.createRule(parcel))
-                    parcel.recycle()
-                } catch (e: Throwable) {
-                    throw RuntimeException("Error parsing rule[$i]: ${e.message}", e)
-                }
+                val data = Util.b64Decode(jsonRules[i] as String)
+                val parcel = Parcel.obtain()
+                parcel.unmarshall(data, 0, data.size)
+                parcel.setDataPosition(0)
+                rules.add(ParcelizeBridge.createRule(parcel))
+                parcel.recycle()
             }
             SagerDatabase.rulesDao.reset()
             SagerDatabase.rulesDao.insert(rules)
@@ -751,16 +737,12 @@ class BackupFragment : NamedFragment(R.layout.layout_backup) {
             val settings = mutableListOf<KeyValuePair>()
             val jsonSettings = content.getJSONArray("settings")
             for (i in 0 until jsonSettings.length()) {
-                try {
-                    val data = Util.b64Decode(jsonSettings[i] as String)
-                    val parcel = Parcel.obtain()
-                    parcel.unmarshall(data, 0, data.size)
-                    parcel.setDataPosition(0)
-                    settings.add(KeyValuePair.CREATOR.createFromParcel(parcel))
-                    parcel.recycle()
-                } catch (e: Throwable) {
-                    throw RuntimeException("Error parsing setting[$i]: ${e.message}", e)
-                }
+                val data = Util.b64Decode(jsonSettings[i] as String)
+                val parcel = Parcel.obtain()
+                parcel.unmarshall(data, 0, data.size)
+                parcel.setDataPosition(0)
+                settings.add(KeyValuePair.CREATOR.createFromParcel(parcel))
+                parcel.recycle()
             }
             PublicDatabase.kvPairDao.reset()
             PublicDatabase.kvPairDao.insert(settings)
