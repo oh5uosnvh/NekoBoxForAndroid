@@ -650,10 +650,18 @@ internal class TopBarController(
                 jumpTo(index)
             }
 
-            // 长按分组名 → 进该分组的设置编辑界面
+            // 长按分组名 → 跳转分组界面且定位至该配置分组
             rowView.setOnLongClickListener {
                 dismissGroupPicker()
-                openGroupSettings(g.id)
+                val targetFragment = io.nekohasekai.sagernet.ui.GroupFragment().apply {
+                    arguments = Bundle().apply {
+                        putLong(io.nekohasekai.sagernet.ui.GroupFragment.EXTRA_TARGET_GROUP_ID, g.id)
+                    }
+                }
+                (host.activity as? MainActivity)?.apply {
+                    displayFragment(targetFragment)
+                    navigation.menu.findItem(R.id.nav_group)?.isChecked = true
+                }
                 true
             }
 
@@ -725,13 +733,6 @@ internal class TopBarController(
         }
 
         groupPopup = popup
-    }
-
-    private fun openGroupSettings(groupId: Long) {
-        context.startActivity(
-            Intent(context, GroupSettingsActivity::class.java)
-                .putExtra(GroupSettingsActivity.EXTRA_GROUP_ID, groupId)
-        )
     }
 
     /**

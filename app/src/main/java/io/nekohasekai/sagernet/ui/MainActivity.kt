@@ -363,8 +363,14 @@ class MainActivity : ThemedActivity(),
     }
 
     override fun onNavigationItemSelected(item: MenuItem): Boolean {
-        if (item.isChecked) binding.drawerLayout.closeDrawers() else {
-            return displayFragmentWithId(item.itemId)
+        val itemId = item.itemId
+        binding.drawerLayout.closeDrawers()
+        if (!item.isChecked) {
+            binding.drawerLayout.postDelayed({
+                if (!isFinishing && !isDestroyed) {
+                    displayFragmentWithId(itemId)
+                }
+            }, 250)
         }
         return true
     }
