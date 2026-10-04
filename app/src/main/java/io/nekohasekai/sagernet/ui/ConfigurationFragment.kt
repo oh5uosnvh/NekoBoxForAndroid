@@ -520,20 +520,14 @@ class ConfigurationFragment @JvmOverloads constructor(
             tab.view.setOnLongClickListener {
                 if (position in adapter.groupList.indices) {
                     val group = adapter.groupList[position]
-                    if (!group.ungrouped) {
-                        startActivity(Intent(requireContext(), GroupSettingsActivity::class.java).apply {
-                            putExtra(GroupSettingsActivity.EXTRA_GROUP_ID, group.id)
-                        })
-                    } else {
-                        val targetFragment = io.nekohasekai.sagernet.ui.GroupFragment().apply {
-                            arguments = Bundle().apply {
-                                putLong(io.nekohasekai.sagernet.ui.GroupFragment.EXTRA_TARGET_GROUP_ID, group.id)
-                            }
+                    val targetFragment = io.nekohasekai.sagernet.ui.GroupFragment().apply {
+                        arguments = Bundle().apply {
+                            putLong(io.nekohasekai.sagernet.ui.GroupFragment.EXTRA_TARGET_GROUP_ID, group.id)
                         }
-                        (activity as? MainActivity)?.apply {
-                            displayFragment(targetFragment)
-                            navigation.menu.findItem(R.id.nav_group)?.isChecked = true
-                        }
+                    }
+                    (activity as? MainActivity)?.apply {
+                        displayFragment(targetFragment)
+                        navigation.menu.findItem(R.id.nav_group)?.isChecked = true
                     }
                 }
                 true
