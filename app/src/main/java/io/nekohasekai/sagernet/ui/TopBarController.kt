@@ -651,18 +651,13 @@ internal class TopBarController(
                 jumpTo(index)
             }
 
-            // 长按分组名 → 跳转分组界面且定位至该配置分组
+            // 长按分组名 → 进该分组的设置编辑界面
             rowView.setOnLongClickListener {
                 dismissGroupPicker()
-                val targetFragment = io.nekohasekai.sagernet.ui.GroupFragment().apply {
-                    arguments = Bundle().apply {
-                        putLong(io.nekohasekai.sagernet.ui.GroupFragment.EXTRA_TARGET_GROUP_ID, g.id)
-                    }
-                }
-                (host.activity as? MainActivity)?.apply {
-                    displayFragment(targetFragment)
-                    navigation.menu.findItem(R.id.nav_group)?.isChecked = true
-                }
+                context.startActivity(
+                    Intent(context, GroupSettingsActivity::class.java)
+                        .putExtra(GroupSettingsActivity.EXTRA_GROUP_ID, g.id)
+                )
                 true
             }
 

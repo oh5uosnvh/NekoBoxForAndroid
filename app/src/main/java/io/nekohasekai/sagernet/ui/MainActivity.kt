@@ -373,12 +373,10 @@ class MainActivity : ThemedActivity(),
     @SuppressLint("CommitTransaction")
     fun displayFragment(fragment: ToolbarFragment) {
         currentMainFragment = fragment
-        binding.drawerLayout.closeDrawers()
         supportFragmentManager.beginTransaction()
-            .setReorderingAllowed(true)
-            .setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out)
             .replace(R.id.fragment_holder, fragment)
             .commitAllowingStateLoss()
+        binding.drawerLayout.closeDrawers()
         syncMainControls(fragment, showWhenConnected = false, animate = false)
     }
 
