@@ -1860,9 +1860,11 @@ class ConfigurationFragment @JvmOverloads constructor(
 
         fun applyTopPadding(topPadding: Int) {
             if (::configurationListView.isInitialized && topPadding > 0) {
+                val extraMargin = dp2px(12)
+                val targetPadding = topPadding + extraMargin
                 configurationListView.setPadding(
                     configurationListView.paddingLeft,
-                    topPadding,
+                    targetPadding,
                     configurationListView.paddingRight,
                     configurationListView.paddingBottom,
                 )
@@ -1874,10 +1876,11 @@ class ConfigurationFragment @JvmOverloads constructor(
 
             configurationListView = view.findViewById(R.id.configuration_list)
             (parentFragment as? ConfigurationFragment)?.view?.findViewById<View>(R.id.topbar_container)?.let { tc ->
+                val extraMargin = dp2px(12)
                 if (tc.height > 0) {
                     configurationListView.setPadding(
                         configurationListView.paddingLeft,
-                        tc.height,
+                        tc.height + extraMargin,
                         configurationListView.paddingRight,
                         configurationListView.paddingBottom,
                     )
@@ -1886,7 +1889,7 @@ class ConfigurationFragment @JvmOverloads constructor(
                         if (::configurationListView.isInitialized && tc.height > 0) {
                             configurationListView.setPadding(
                                 configurationListView.paddingLeft,
-                                tc.height,
+                                tc.height + extraMargin,
                                 configurationListView.paddingRight,
                                 configurationListView.paddingBottom,
                             )
