@@ -520,14 +520,20 @@ class ConfigurationFragment @JvmOverloads constructor(
             tab.view.setOnLongClickListener {
                 if (position in adapter.groupList.indices) {
                     val group = adapter.groupList[position]
-                    val targetFragment = io.nekohasekai.sagernet.ui.GroupFragment().apply {
-                        arguments = Bundle().apply {
-                            putLong(io.nekohasekai.sagernet.ui.GroupFragment.EXTRA_TARGET_GROUP_ID, group.id)
+                    if (!group.ungrouped) {
+                        startActivity(Intent(requireContext(), GroupSettingsActivity::class.java).apply {
+                            putExtra(GroupSettingsActivity.EXTRA_GROUP_ID, group.id)
+                        })
+                    } else {
+                        val targetFragment = io.nekohasekai.sagernet.ui.GroupFragment().apply {
+                            arguments = Bundle().apply {
+                                putLong(io.nekohasekai.sagernet.ui.GroupFragment.EXTRA_TARGET_GROUP_ID, group.id)
+                            }
                         }
-                    }
-                    (activity as? MainActivity)?.apply {
-                        displayFragment(targetFragment)
-                        navigation.menu.findItem(R.id.nav_group)?.isChecked = true
+                        (activity as? MainActivity)?.apply {
+                            displayFragment(targetFragment)
+                            navigation.menu.findItem(R.id.nav_group)?.isChecked = true
+                        }
                     }
                 }
                 true
@@ -658,14 +664,16 @@ class ConfigurationFragment @JvmOverloads constructor(
                             ?.let { pl -> proxies.addAll(pl) }
                     }
                     if (proxies.isEmpty()) onMainDispatcher {
-                        snackbar(getString(R.string.no_proxies_found_in_file)).show()
+                        if (isAdded) snackbar(getString(R.string.no_proxies_found_in_file)).show()
                     } else import(proxies)
                 } catch (e: SubscriptionFoundException) {
-                    (requireActivity() as MainActivity).importSubscription(e.link.toUri())
+                    val act = activity as? MainActivity ?: SagerNet.currentActivity?.get() as? MainActivity
+                    act?.importSubscription(e.link.toUri())
                 } catch (e: Exception) {
                     Logs.w(e)
                     onMainDispatcher {
-                        snackbar(e.readableMessage).show()
+                        val act = activity as? MainActivity ?: SagerNet.currentActivity?.get() as? MainActivity
+                        act?.snackbar(e.readableMessage)?.show()
                     }
                 }
             }
