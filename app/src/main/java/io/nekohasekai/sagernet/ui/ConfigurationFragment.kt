@@ -518,9 +518,9 @@ class ConfigurationFragment @JvmOverloads constructor(
             tab.view.setOnLongClickListener {
                 if (position in adapter.groupList.indices) {
                     val group = adapter.groupList[position]
-                    val targetFragment = GroupFragment().apply {
+                    val targetFragment = io.nekohasekai.sagernet.ui.GroupFragment().apply {
                         arguments = Bundle().apply {
-                            putLong(GroupFragment.EXTRA_TARGET_GROUP_ID, group.id)
+                            putLong(io.nekohasekai.sagernet.ui.GroupFragment.EXTRA_TARGET_GROUP_ID, group.id)
                         }
                     }
                     (activity as? MainActivity)?.apply {
