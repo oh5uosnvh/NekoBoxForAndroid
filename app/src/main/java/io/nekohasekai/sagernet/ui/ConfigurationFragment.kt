@@ -573,7 +573,7 @@ class ConfigurationFragment @JvmOverloads constructor(
             val h = topbarContainer.height
             if (h > 0) {
                 adapter.groupFragments.values.forEach {
-                    it.configurationListView.updatePadding(top = h)
+                    it.applyTopPadding(h)
                 }
             }
         }
@@ -1834,7 +1834,12 @@ class ConfigurationFragment @JvmOverloads constructor(
 
         fun applyTopPadding(topPadding: Int) {
             if (::configurationListView.isInitialized && topPadding > 0) {
-                configurationListView.updatePadding(top = topPadding)
+                configurationListView.setPadding(
+                    configurationListView.paddingLeft,
+                    topPadding,
+                    configurationListView.paddingRight,
+                    configurationListView.paddingBottom,
+                )
             }
         }
 
@@ -1844,11 +1849,21 @@ class ConfigurationFragment @JvmOverloads constructor(
             configurationListView = view.findViewById(R.id.configuration_list)
             (parentFragment as? ConfigurationFragment)?.view?.findViewById<View>(R.id.topbar_container)?.let { tc ->
                 if (tc.height > 0) {
-                    configurationListView.updatePadding(top = tc.height)
+                    configurationListView.setPadding(
+                        configurationListView.paddingLeft,
+                        tc.height,
+                        configurationListView.paddingRight,
+                        configurationListView.paddingBottom,
+                    )
                 } else {
                     tc.post {
                         if (::configurationListView.isInitialized && tc.height > 0) {
-                            configurationListView.updatePadding(top = tc.height)
+                            configurationListView.setPadding(
+                                configurationListView.paddingLeft,
+                                tc.height,
+                                configurationListView.paddingRight,
+                                configurationListView.paddingBottom,
+                            )
                         }
                     }
                 }
