@@ -363,27 +363,23 @@ class MainActivity : ThemedActivity(),
     }
 
     override fun onNavigationItemSelected(item: MenuItem): Boolean {
-        val itemId = item.itemId
-        binding.drawerLayout.closeDrawers()
-        if (!item.isChecked) {
-            binding.drawerLayout.postDelayed({
-                if (!isFinishing && !isDestroyed) {
-                    displayFragmentWithId(itemId)
-                }
-            }, 250)
+        if (item.isChecked) {
+            binding.drawerLayout.closeDrawers()
+            return true
         }
-        return true
+        return displayFragmentWithId(item.itemId)
     }
-
 
     @SuppressLint("CommitTransaction")
     fun displayFragment(fragment: ToolbarFragment) {
         currentMainFragment = fragment
+        binding.drawerLayout.closeDrawers()
         supportFragmentManager.beginTransaction()
+            .setReorderingAllowed(true)
+            .setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out)
             .replace(R.id.fragment_holder, fragment)
             .commitAllowingStateLoss()
-        binding.drawerLayout.closeDrawers()
-        syncMainControls(fragment, showWhenConnected = false, animate = true)
+        syncMainControls(fragment, showWhenConnected = false, animate = false)
     }
 
     private fun syncMainControls(
