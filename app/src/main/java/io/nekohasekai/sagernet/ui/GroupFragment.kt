@@ -59,6 +59,7 @@ class GroupFragment : ToolbarFragment(R.layout.layout_group),
     private var sortMode = SORT_DEFAULT
 
     companion object {
+        const val EXTRA_TARGET_GROUP_ID = "target_group_id"
         private const val TOPBAR_SEGMENT_LIGHTEN = 0.30f
 
         private const val SORT_DEFAULT = 0
@@ -924,10 +925,6 @@ class GroupFragment : ToolbarFragment(R.layout.layout_group),
             }
 
         }
-    }
-
-    companion object {
-        const val EXTRA_TARGET_GROUP_ID = "target_group_id"
     }
 
 }
