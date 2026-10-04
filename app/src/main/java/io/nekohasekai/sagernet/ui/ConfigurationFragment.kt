@@ -570,15 +570,7 @@ class ConfigurationFragment @JvmOverloads constructor(
 
         DataStore.profileCacheStore.registerChangeListener(this)
 
-        val topbarContainer = view.findViewById<View>(R.id.topbar_container)
-        topbarContainer.post {
-            val h = topbarContainer.height
-            if (h > 0) {
-                adapter.groupFragments.values.forEach {
-                    it.applyTopPadding(h)
-                }
-            }
-        }
+
     }
 
     override fun onPrepareOptionsMenu(menu: Menu) {
@@ -1858,45 +1850,10 @@ class ConfigurationFragment @JvmOverloads constructor(
             adapter?.notifyDataSetChanged()
         }
 
-        fun applyTopPadding(topPadding: Int) {
-            if (::configurationListView.isInitialized && topPadding > 0) {
-                val extraMargin = dp2px(12)
-                val targetPadding = topPadding + extraMargin
-                configurationListView.setPadding(
-                    configurationListView.paddingLeft,
-                    targetPadding,
-                    configurationListView.paddingRight,
-                    configurationListView.paddingBottom,
-                )
-            }
-        }
-
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
             if (!::proxyGroup.isInitialized) return
 
             configurationListView = view.findViewById(R.id.configuration_list)
-            (parentFragment as? ConfigurationFragment)?.view?.findViewById<View>(R.id.topbar_container)?.let { tc ->
-                val extraMargin = dp2px(12)
-                if (tc.height > 0) {
-                    configurationListView.setPadding(
-                        configurationListView.paddingLeft,
-                        tc.height + extraMargin,
-                        configurationListView.paddingRight,
-                        configurationListView.paddingBottom,
-                    )
-                } else {
-                    tc.post {
-                        if (::configurationListView.isInitialized && tc.height > 0) {
-                            configurationListView.setPadding(
-                                configurationListView.paddingLeft,
-                                tc.height + extraMargin,
-                                configurationListView.paddingRight,
-                                configurationListView.paddingBottom,
-                            )
-                        }
-                    }
-                }
-            }
             setupLayoutManager()
             configurationListView.layoutManager = layoutManager
             adapter = ConfigurationAdapter()
