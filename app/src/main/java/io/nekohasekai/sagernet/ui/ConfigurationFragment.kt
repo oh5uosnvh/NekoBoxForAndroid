@@ -567,6 +567,16 @@ class ConfigurationFragment @JvmOverloads constructor(
         )
 
         DataStore.profileCacheStore.registerChangeListener(this)
+
+        val topbarContainer = view.findViewById<View>(R.id.topbar_container)
+        topbarContainer.post {
+            val h = topbarContainer.height
+            if (h > 0) {
+                adapter.groupFragments.values.forEach {
+                    it.configurationListView.updatePadding(top = h)
+                }
+            }
+        }
     }
 
     override fun onPrepareOptionsMenu(menu: Menu) {
@@ -1822,10 +1832,27 @@ class ConfigurationFragment @JvmOverloads constructor(
             adapter?.notifyDataSetChanged()
         }
 
+        fun applyTopPadding(topPadding: Int) {
+            if (::configurationListView.isInitialized && topPadding > 0) {
+                configurationListView.updatePadding(top = topPadding)
+            }
+        }
+
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
             if (!::proxyGroup.isInitialized) return
 
             configurationListView = view.findViewById(R.id.configuration_list)
+            (parentFragment as? ConfigurationFragment)?.view?.findViewById<View>(R.id.topbar_container)?.let { tc ->
+                if (tc.height > 0) {
+                    configurationListView.updatePadding(top = tc.height)
+                } else {
+                    tc.post {
+                        if (::configurationListView.isInitialized && tc.height > 0) {
+                            configurationListView.updatePadding(top = tc.height)
+                        }
+                    }
+                }
+            }
             setupLayoutManager()
             configurationListView.layoutManager = layoutManager
             adapter = ConfigurationAdapter()
