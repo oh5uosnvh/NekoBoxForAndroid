@@ -158,6 +158,7 @@ class ConfigurationFragment @JvmOverloads constructor(
     lateinit var adapter: GroupPagerAdapter
     lateinit var tabLayout: TabLayout
     lateinit var groupPager: ViewPager2
+    private var isRestoringGroup = false
 
     /** 顶栏 ⊙ / 分组 控件，见 TopBarController */
     private val topBar = TopBarController(this)
@@ -362,11 +363,12 @@ class ConfigurationFragment @JvmOverloads constructor(
     }
 
     val updateSelectedCallback = object : ViewPager2.OnPageChangeCallback() {
-        override fun onPageScrolled(
-            position: Int, positionOffset: Float, positionOffsetPixels: Int
-        ) {
-            if (adapter.groupList.size > position) {
-                DataStore.selectedGroup = adapter.groupList[position].id
+        override fun onPageSelected(position: Int) {
+            if (!isRestoringGroup && adapter.groupList.size > position) {
+                val newId = adapter.groupList[position].id
+                if (DataStore.selectedGroup != newId) {
+                    DataStore.selectedGroup = newId
+                }
             }
         }
     }
@@ -518,6 +520,10 @@ class ConfigurationFragment @JvmOverloads constructor(
             tab.view.setOnLongClickListener {
                 if (position in adapter.groupList.indices) {
                     val group = adapter.groupList[position]
+                    DataStore.selectedGroup = group.id
+                    if (groupPager.currentItem != position) {
+                        groupPager.setCurrentItem(position, false)
+                    }
                     val targetFragment = io.nekohasekai.sagernet.ui.GroupFragment().apply {
                         arguments = Bundle().apply {
                             putLong(io.nekohasekai.sagernet.ui.GroupFragment.EXTRA_TARGET_GROUP_ID, group.id)
@@ -604,6 +610,12 @@ class ConfigurationFragment @JvmOverloads constructor(
 
     override fun onDestroy() {
         DataStore.profileCacheStore.unregisterChangeListener(this)
+
+        if (::groupPager.isInitialized) {
+            try {
+                groupPager.unregisterOnPageChangeCallback(updateSelectedCallback)
+            } catch (_: Exception) {}
+        }
 
         if (::adapter.isInitialized) {
             GroupManager.removeListener(adapter)
@@ -1452,9 +1464,22 @@ class ConfigurationFragment @JvmOverloads constructor(
                                 refreshProfileState()
                                 newSelectedGroupIndex?.let { selectedGroupIndex = it }
                                 groupList = newGroupList
+                                isRestoringGroup = true
                                 notifyDataSetChanged()
-                                if (newSelectedGroupIndex != null) {
+                                if (newSelectedGroupIndex != null && selectedGroupIndex in groupList.indices) {
                                     groupPager.setCurrentItem(selectedGroupIndex, false)
+                                    tabLayout.post {
+                                        if (selectedGroupIndex in 0 until tabLayout.tabCount) {
+                                            val tab = tabLayout.getTabAt(selectedGroupIndex)
+                                            if (tab != null && !tab.isSelected) {
+                                                tab.select()
+                                            }
+                                            tabLayout.setScrollPosition(selectedGroupIndex, 0f, true)
+                                        }
+                                        isRestoringGroup = false
+                                    }
+                                } else {
+                                    isRestoringGroup = false
                                 }
                                 val hideTab = groupList.size < 2
                                 tabLayout.isGone = hideTab
