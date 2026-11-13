@@ -132,80 +132,62 @@ object RawUpdater : GroupUpdater() {
 
         Logs.d("New profiles: ${proxies.size}")
 
-        val nameMap = proxies.associateBy { bean ->
-            bean.displayName()
-        }
-
-        Logs.d("Unique profiles: ${nameMap.size}")
-
-        val toDelete = ArrayList<ProxyEntity>()
-        val toReplace = exists.mapNotNull { entity ->
-            val name = entity.displayName()
-            if (nameMap.contains(name)) name to entity else let {
-                toDelete.add(entity)
-                null
-            }
-        }.toMap()
-
-        Logs.d("toDelete profiles: ${toDelete.size}")
-        Logs.d("toReplace profiles: ${toReplace.size}")
-
+        // Names are presentation data and often contain traffic/expiry counters.
+        // Never use them as the identity of a subscription profile: a provider may
+        // change a name without changing the actual endpoint.
+        val available = proxies.groupBy { it.subscriptionKey() }
+            .mapValues { it.value.toMutableList() }
+            .toMutableMap()
         val toUpdate = ArrayList<ProxyEntity>()
+        val toDelete = ArrayList<ProxyEntity>()
         val added = mutableListOf<String>()
         val updated = mutableMapOf<String, String>()
-        val deleted = toDelete.map { it.displayName() }
-
+        val deleted = mutableListOf<String>()
         var userOrder = 1L
-        var changed = toDelete.size
-        for ((name, bean) in nameMap.entries) {
-            if (toReplace.contains(name)) {
-                val entity = toReplace[name]!!
-                val existsBean = entity.requireBean()
-                // 更新订阅，保留自定义覆写设置
-                bean.customOutboundJson = existsBean.customOutboundJson
-                bean.customConfigJson = existsBean.customConfigJson
-                when {
-                    existsBean != bean -> {
-                        changed++
-                        entity.putBean(bean)
-                        toUpdate.add(entity)
-                        updated[entity.displayName()] = name
-
-                        Logs.d("Updated profile: $name")
-                    }
-
-                    entity.userOrder != userOrder -> {
-                        entity.putBean(bean)
-                        toUpdate.add(entity)
-                        entity.userOrder = userOrder
-
-                        Logs.d("Reordered profile: $name")
-                    }
-
-                    else -> {
-                        Logs.d("Ignored profile: $name")
-                    }
-                }
-            } else {
-                changed++
-                SagerDatabase.proxyDao.addProxy(
-                    ProxyEntity(
-                        groupId = proxyGroup.id, userOrder = userOrder
-                    ).apply {
-                        putBean(bean)
-                    })
-                added.add(name)
-                Logs.d("Inserted profile: $name")
+        var changed = 0
+        for (entity in exists) {
+            val oldBean = entity.requireBean()
+            val key = oldBean.subscriptionKey()
+            val bean = available[key]?.removeFirstOrNull()
+            if (bean == null) {
+                // Do not destroy a profile (or a user group reference) merely
+                // because a subscription temporarily omitted it or renamed it.
+                // It remains available until the user explicitly removes it.
+                entity.userOrder = userOrder++
+                toUpdate.add(entity)
+                Logs.w("Keeping unmatched subscription profile: ${entity.displayName()}")
+                continue
             }
-            userOrder++
+
+            bean.customOutboundJson = oldBean.customOutboundJson
+            bean.customConfigJson = oldBean.customConfigJson
+            val oldName = entity.displayName()
+            val newName = bean.displayName()
+            entity.putBean(bean)
+            entity.userOrder = userOrder++
+            toUpdate.add(entity)
+            if (oldBean != bean || oldName != newName) {
+                changed++
+                updated[oldName] = newName
+                Logs.d("Updated profile: $oldName -> $newName")
+            }
+        }
+
+        // Insert only genuinely new stable identities. Keep the provider order
+        // after existing profiles so tag/group references remain stable.
+        for (bean in available.values.flatten()) {
+            val name = bean.displayName()
+            changed++
+            SagerDatabase.proxyDao.addProxy(
+                ProxyEntity(groupId = proxyGroup.id, userOrder = userOrder++).apply {
+                    putBean(bean)
+                })
+            added.add(name)
+            Logs.d("Inserted profile: $name")
         }
 
         SagerDatabase.proxyDao.updateProxy(toUpdate).also {
             Logs.d("Updated profiles: $it")
-        }
-
-        SagerDatabase.proxyDao.deleteProxy(toDelete).also {
-            Logs.d("Deleted profiles: $it")
         }
 
         val existCount = SagerDatabase.proxyDao.countByGroup(proxyGroup.id).toInt()
@@ -221,6 +203,27 @@ object RawUpdater : GroupUpdater() {
         userInterface?.onUpdateSuccess(
             proxyGroup, changed, added, updated, deleted, duplicate, byUser
         )
+    }
+
+    /** Stable identity for subscription reconciliation. Display names are mutable. */
+    private fun AbstractBean.subscriptionKey(): String {
+        val standard = this as? StandardV2RayBean
+        val extra = when (this) {
+            is TrojanBean -> "password=${password}"
+            else -> ""
+        }
+        return listOf(
+            javaClass.name,
+            serverAddress.trim().lowercase(),
+            serverPort ?: 0,
+            standard?.uuid.orEmpty(),
+            extra,
+            standard?.type.orEmpty(),
+            standard?.path.orEmpty(),
+            standard?.host.orEmpty(),
+            standard?.sni.orEmpty(),
+            standard?.realityPubKey.orEmpty()
+        ).joinToString("\\u001f")
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -309,6 +312,7 @@ object RawUpdater : GroupUpdater() {
                                 "vmess" -> VMessBean()
                                 "vless" -> VMessBean().apply {
                                     alterId = -1 // make it VLESS
+                                    encryption = "none"
                                     packetEncoding = 2 // clash meta default XUDP
                                 }
 
@@ -390,9 +394,17 @@ object RawUpdater : GroupUpdater() {
                                         }
                                     }
 
+                                    "ws-path" -> bean.path = opt.value?.toString()
+
+                                    "ws-headers" -> (opt.value as? Map<Any, Any?>)?.forEach { (key, value) ->
+                                        if (key.toString().equals("host", ignoreCase = true)) {
+                                            bean.host = value?.toString()
+                                        }
+                                    }
+
                                     "ws-opts" -> (opt.value as? Map<String, Any?>)?.also {
                                         for (wsOpt in it) {
-                                            when (wsOpt.key) {
+                                            when (wsOpt.key.lowercase()) {
                                                 "headers" -> (wsOpt.value as? Map<Any, Any?>)?.forEach { (key, value) ->
                                                     when (key.toString().lowercase()) {
                                                         "host" -> {
