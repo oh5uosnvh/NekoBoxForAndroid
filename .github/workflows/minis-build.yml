@@ -1,0 +1,37 @@
+name: Minis Deep Fix Build
+on:
+  workflow_dispatch:
+  push:
+    branches: [minis-deep-fix]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.5'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK components
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.1" "ndk;25.0.8775105"
+      - name: Build native core
+        run: ./run lib core
+      - name: Build preview APK
+        env:
+          BUILD_PLUGIN: none
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          echo "ndk.dir=${ANDROID_HOME}/ndk/25.0.8775105" >> local.properties
+          ./run init action gradle
+          ./gradlew app:assemblePreviewRelease --no-daemon
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: nekobox-minis-deep-fix-apk
+          path: app/build/outputs/apk/**/*.apk
