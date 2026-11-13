@@ -17,9 +17,10 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25.5'
-      - uses: android-actions/setup-android@v3
-      - name: Install Android SDK components
-        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.1" "ndk;25.0.8775105"
+      - name: Prepare Android SDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.1" "ndk;25.0.8775105"
       - name: Build native core
         run: ./run lib core
       - name: Build preview APK
