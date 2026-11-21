@@ -3,20 +3,17 @@
 package husiurltest
 
 import (
-	"context"
 	"crypto/tls"
 	"net"
 	"net/http"
 
-	"github.com/sagernet/quic-go"
-	"github.com/sagernet/quic-go/http3"
+	C "github.com/sagernet/sing-box/constant"
 )
 
-func newHTTP3Transport(conn net.Conn, tlsConfig *tls.Config) (http.RoundTripper, error) {
-	return &http3.Transport{
-		TLSClientConfig: tlsConfig,
-		Dial: func(ctx context.Context, _ string, tlsConfig *tls.Config, quicConfig *quic.Config) (*quic.Conn, error) {
-			return quic.DialEarlyConn(ctx, conn, tlsConfig, quicConfig)
-		},
-	}, nil
+// Neko's pinned quic-go exposes a different HTTP/3 dial contract than husi's
+// current dependency. Keep the build-tagged entry point ABI-compatible and
+// fail closed instead of silently testing HTTP/3 outside the selected outbound.
+// The regular HTTP/HTTPS URLTest path remains fully supported.
+func newHTTP3Transport(_ net.Conn, _ *tls.Config) (http.RoundTripper, error) {
+	return nil, C.ErrQUICNotIncluded
 }
