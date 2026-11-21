@@ -41,6 +41,7 @@ import (
 	"github.com/sagernet/sing-box/protocol/wireguard"
 
 	"libcore/protocol/juicity"
+	"libcore/protocol/xhttp"
 
 	_ "github.com/sagernet/sing-box/experimental/clashapi"
 	_ "github.com/sagernet/sing-box/transport/v2rayquic"
@@ -89,6 +90,7 @@ func nekoboxAndroidOutboundRegistry() *outbound.Registry {
 	tuic.RegisterOutbound(registry)
 	hysteria2.RegisterOutbound(registry)
 	juicity.RegisterOutbound(registry)
+	xhttp.RegisterOutbound(registry)
 
 	wireguard.RegisterOutbound(registry)
 

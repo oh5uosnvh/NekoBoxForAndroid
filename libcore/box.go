@@ -11,13 +11,13 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/matsuridayo/libneko/protect_server"
-	"github.com/matsuridayo/libneko/speedtest"
-	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/boxapi"
 	"github.com/sagernet/sing-box/experimental/libbox/platform"
 	"github.com/sagernet/sing-box/protocol/group"
+	"libcore/husiurltest"
 
 	box "github.com/sagernet/sing-box"
 	"github.com/sagernet/sing-box/common/conntrack"
@@ -215,23 +215,28 @@ func (b *BoxInstance) SelectOutbound(tag string) bool {
 
 func UrlTest(i *BoxInstance, link string, timeout int32) (latency int32, err error) {
 	defer device.DeferPanicToError("box.UrlTest", func(err_ error) { err = err_ })
-	var connectionTracker adapter.ConnectionTracker
-	// test i
-	if i != nil {
-		if i.v2api != nil {
-			connectionTracker = i.v2api.StatsService()
-		}
-		return speedtest.UrlTest(boxapi.CreateProxyHttpClient(i.Box, connectionTracker), link, timeout, speedtest.UrlTestStandard_RTT)
+	ctx := context.Background()
+	if i != nil && i.Box != nil {
+		return husiurltest.Run(ctx, i.Outbound().Default(), link, timeout, husiurltest.UnifiedDelay)
 	}
-	// test direct
-	if mainInstance == nil {
-		return speedtest.UrlTest(boxapi.CreateProxyHttpClient(nil, nil), link, timeout, speedtest.UrlTestStandard_RTT)
+	if mainInstance != nil && mainInstance.Box != nil {
+		return husiurltest.Run(ctx, mainInstance.Outbound().Default(), link, timeout, husiurltest.UnifiedDelay)
 	}
-	// test mainInstance
-	if mainInstance.v2api != nil {
-		connectionTracker = mainInstance.v2api.StatsService()
+	return directURLTest(ctx, link, timeout)
+}
+
+func directURLTest(ctx context.Context, link string, timeout int32) (int32, error) {
+	if timeout <= 0 {
+		timeout = 5000
 	}
-	return speedtest.UrlTest(boxapi.CreateProxyHttpClient(mainInstance.Box, connectionTracker), link, timeout, speedtest.UrlTestStandard_RTT)
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Millisecond)
+	defer cancel()
+	d, err := dialer.NewDefault(ctx, option.DialerOptions{})
+	if err != nil {
+		return -1, err
+	}
+	latency, err := husiurltest.Measure(ctx, link, d, husiurltest.UnifiedDelay)
+	return int32(latency), err
 }
 
 var protectCloser io.Closer

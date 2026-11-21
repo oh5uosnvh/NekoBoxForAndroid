@@ -246,6 +246,13 @@ suspend fun parseProxies(text: String): List<AbstractBean> {
             }.onFailure {
                 Logs.w(it)
             }
+        } else if (startsWith("heysocks://")) {
+            Logs.d("Try parse heysocks xhttp link")
+            runCatching {
+                entities.add(parseHeysocksLink(this))
+            }.onFailure {
+                Logs.w(it)
+            }
         }
     }
 
