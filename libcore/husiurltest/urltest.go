@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"context"
 	"crypto/tls"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -181,13 +182,19 @@ func measure(ctx context.Context, link string, detour N.Dialer, flags Flags) (t 
 	if err != nil {
 		return
 	}
-	defer response.Body.Close()
 	if flags&UnifiedDelay != 0 {
+		// Drain and close the warm-up response before the measured request.
+		// This preserves HTTP keep-alive while avoiding two outstanding
+		// responses on the fixed sing-box connection.
+		_, _ = io.Copy(io.Discard, response.Body)
+		_ = response.Body.Close()
 		start = time.Now()
-		response, err := client.Do(req)
+		response, err = client.Do(req)
 		if err != nil {
 			return 0, err
 		}
+		defer response.Body.Close()
+	} else {
 		defer response.Body.Close()
 	}
 	t = uint16(time.Since(start) / time.Millisecond)
