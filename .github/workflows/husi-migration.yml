@@ -164,6 +164,7 @@ jobs:
         env:
           BUILD_PLUGIN: none
           BUILD_VARIANT: ${{ inputs.build_type || 'ossDebug' }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -o pipefail
           ./gradlew "app:assemble${BUILD_VARIANT^}" --stacktrace 2>&1 | tee apk-build.log
