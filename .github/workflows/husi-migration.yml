@@ -1,0 +1,185 @@
+name: Husi Core Migration Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to build
+        required: true
+        default: husi-core-migration
+        type: string
+      build_type:
+        description: Android build variant
+        required: true
+        default: ossDebug
+        type: choice
+        options:
+          - ossDebug
+          - ossRelease
+  push:
+    branches:
+      - husi-core-migration
+    paths:
+      - 'libcore/**'
+      - 'app/src/main/**'
+      - 'buildScript/**'
+      - '.github/workflows/husi-migration.yml'
+      - 'gradle/**'
+      - '*.gradle.kts'
+      - '**/*.gradle.kts'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: husi-migration-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ANDROID_NDK_VERSION: 25.0.8775105
+  JAVA_VERSION: '17'
+  GO_VERSION: '1.24.9'
+
+jobs:
+  libcore:
+    name: Build libcore.aar
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout selected ref
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: libcore/go.sum
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Prepare Android environment
+        shell: bash
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          echo "ndk.dir=${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}" >> local.properties
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;${ANDROID_NDK_VERSION}"
+
+      - name: Build native core
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ./run lib core 2>&1 | tee libcore-build.log
+
+      - name: Verify native artifact
+        shell: bash
+        run: |
+          test -s app/libs/libcore.aar
+          sha256sum app/libs/libcore.aar | tee libcore.aar.sha256
+
+      - name: Upload native artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: husi-migration-libcore-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            app/libs/libcore.aar
+            libcore-build.log
+            libcore.aar.sha256
+
+  apk:
+    name: Build NekoBox APKs
+    needs: libcore
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout selected ref
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Prepare Android environment
+        shell: bash
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          echo "ndk.dir=${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}" >> local.properties
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;${ANDROID_NDK_VERSION}"
+
+      - name: Download native core
+        uses: actions/download-artifact@v5
+        with:
+          name: husi-migration-libcore-${{ github.sha }}
+          path: native-artifact
+
+      - name: Install native core
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p app/libs
+          CORE_AAR=$(find native-artifact -type f -name libcore.aar -print -quit)
+          test -n "${CORE_AAR}"
+          cp "${CORE_AAR}" app/libs/libcore.aar
+          test -s app/libs/libcore.aar
+
+      - name: Compile HevTun and prepare Gradle
+        shell: bash
+        run: ./run init action gradle
+
+      - name: Assemble APKs
+        shell: bash
+        env:
+          BUILD_PLUGIN: none
+          BUILD_VARIANT: ${{ inputs.build_type || 'ossDebug' }}
+        run: |
+          set -o pipefail
+          ./gradlew "app:assemble${BUILD_VARIANT^}" --stacktrace 2>&1 | tee apk-build.log
+
+      - name: Collect build outputs
+        shell: bash
+        run: |
+          mkdir -p collected
+          find app/build/outputs/apk -type f -name '*.apk' -exec cp {} collected/ \;
+          find app/build/outputs/mapping -type f 2>/dev/null -exec cp {} collected/ \; || true
+          cp apk-build.log collected/
+          cp native-artifact/libcore.aar.sha256 collected/ || true
+          test -n "$(find collected -name '*.apk' -print -quit)"
+          sha256sum collected/*.apk | tee collected/apk.sha256
+
+      - name: Upload APKs and logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: NekoBox-husi-migration-${{ github.sha }}
+          if-no-files-found: error
+          path: collected/
