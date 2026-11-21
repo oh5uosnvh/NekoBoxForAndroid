@@ -64,6 +64,16 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: libcore/go.sum
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: true
+          packages: |
+            platform-tools
+            platforms;android-35
+            build-tools;35.0.0
+            ndk;${{ env.ANDROID_NDK_VERSION }}
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
@@ -72,8 +82,6 @@ jobs:
         run: |
           echo "sdk.dir=${ANDROID_HOME}" > local.properties
           echo "ndk.dir=${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}" >> local.properties
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;${ANDROID_NDK_VERSION}"
 
       - name: Build native core
         shell: bash
@@ -120,6 +128,16 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: true
+          packages: |
+            platform-tools
+            platforms;android-35
+            build-tools;35.0.0
+            ndk;${{ env.ANDROID_NDK_VERSION }}
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
@@ -128,8 +146,6 @@ jobs:
         run: |
           echo "sdk.dir=${ANDROID_HOME}" > local.properties
           echo "ndk.dir=${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}" >> local.properties
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;${ANDROID_NDK_VERSION}"
 
       - name: Download native core
         uses: actions/download-artifact@v5
